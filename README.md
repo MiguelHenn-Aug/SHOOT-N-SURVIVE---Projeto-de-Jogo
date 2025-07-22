@@ -44,7 +44,9 @@ Outra estratégia que eu utilizei foi escrever em letras maiúsculas todas as pa
 
 Caso deseje fazer um projeto semelhante, tenha em mente algumas coisas:
 N.1 - Se feito com boas práticas e muita paciência saiba que ele levará bastante tempo, no meu caso, foi finalizado perto de 1 mês após seu inicio, entretanto, eu trabalhei nele diariamente por pelo menos 7 horas. Mas esse investimento de tempo ajudou a criar um jogo sólido, com mecânicas e jogabilidade coesa;
+
 N.2 - Seu hardware deve estar preparado, a leitura e edição de grandes códigos pela IA acarreta no uso elevado de RAM pelo seu navegador, além de que sua ferramenta para "codar" irá consumir RAM a cada alteração no código, isso se tornará um desafio conforme ele avança. Cada alteração no código permite que você possa desfazê-la, isso fará com que sua máquina armazene cada mudança na RAM (dependendo do swapping, também no HD). No meu caso utilizei as IAs pelo meu navegador MICROSOFT EDGE e utilizei o VISUAL STUDIO CODE para editar e salvar os códigos, meu notebook possui apenas 4GB de RAM e isso se tornou um grande desafio, mas nas máquinas do curso técnico e faculdade que possuiam 8GB de RAM ou mais não sofri este problema.
+
 N.3 - Faça backups frequentes, principalmente em máquinas mais fracas, mais propensas a travamentos e lentidão para evitar que seus arquivos sejam perdidos durante um problema, além de ser uma boa prática necessária em qualquer atividade na área de informática, seus projetos devem ter alguma forma de recuperação em casos de perda.
 
 CONSIDERAÇÕES FINAIS
