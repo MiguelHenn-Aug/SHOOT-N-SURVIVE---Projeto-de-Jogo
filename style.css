@@ -1,0 +1,689 @@
+        /* Cor branco azulado para textos */
+        :root {
+            --bluish-white: #E0E0E0; /* Um branco levemente azulado */
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            /* Fundo animado agora é aplicado ao body para ser visível por trás do canvas */
+            background: linear-gradient(to bottom, #000000, #201927);
+            font-family: 'Press Start 2P', cursive; /* Mantém o estilo retrô */
+            color: var(--bluish-white); /* Cor padrão para textos */
+            user-select: none;
+            image-rendering: pixelated; /* Para um visual pixelado retrô */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh; /* Ocupa a altura total da viewport */
+            flex-direction: column;
+        }
+
+        canvas {
+            display: block;
+            /* Remover o background do canvas para que o background do body seja visível */
+            background-color: transparent; /* Certifica que o canvas é transparente */
+            image-rendering: pixelated;
+            width: 100%;
+            height: 100vh;
+            position: relative;
+            overflow: hidden;
+            z-index: 1; /* Garante que o canvas esteja acima dos pixels de fundo */
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(4, 12, 24, 0.95); /* Fundo quase preto para overlays */
+            z-index: 10;
+            box-shadow: 0 0 20px rgba(75, 0, 130, 0.7); /* Brilho neon para menus */
+            border-radius: 15px; /* Bordas arredondadas */
+        }
+
+        /* Título da tela inicial (novo) */
+        #title-screen-text {
+            font-family: 'Electrolize', sans-serif; /* Fonte futurista */
+            font-size: 56px; /* Tamanho grande */
+            color: #00FFFF; /* Ciano neon */
+            text-shadow: 0 0 15px #00FFFF, 0 0 25px #00FFFF, 0 0 40px rgba(0, 255, 255, 0.6);
+            margin-bottom: 20px; /* Reduzida a margem inferior para o texto abaixo */
+            text-align: center;
+            line-height: 1;
+            letter-spacing: 5px; /* Espaçamento entre letras */
+            animation: neonGlow 1.5s ease-in-out infinite alternate; /* Animação de brilho rápido */
+        }
+
+        /* Animação para o título com brilho */
+        @keyframes neonGlow {
+            from {
+                text-shadow: 0 0 10px #00FFFF, 0 0 20px #00FFFF, 0 0 30px #00FFFF, 0 0 40px #00FFFF;
+                transform: scale(1);
+            }
+            to {
+                text-shadow: 0 0 15px #00FFFF, 0 0 30px #00FFFF, 0 0 45px #00FFFF, 0 0 60px #00FFFF;
+                transform: scale(1.02);
+            }
+        }
+
+        /* Texto "Pressione qualquer tecla ou clique para iniciar" */
+        #press-any-key-text {
+            font-family: 'Press Start 2P', cursive;
+            font-size: 18px; /* Tamanho da fonte */
+            color: #1665cc; /* Dourado neon */
+            text-shadow: 0 0 8px #1665cc;
+            animation: pulseText 1.2s infinite alternate; /* Animação de pulso */
+        }
+
+        /* Animação de pulso para o texto "Pressione qualquer tecla" */
+        @keyframes pulseText {
+            from {
+                transform: scale(1);
+                opacity: 1;
+            }
+            to {
+                transform: scale(1.05);
+                opacity: 0.8;
+            }
+        }
+
+        /* Nova animação de fading para elementos que desaparecem */
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+                transform: scale(1);
+            }
+            to {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+        }
+
+        .fade-out-effect {
+            animation: fadeOut 0.5s ease-out forwards;
+        }
+
+        /* Sombras específicas para menus com cores neon */
+        #upgrade-selection-menu, #player-image-menu { /* Aplicado a ambos os menus */
+            /* Border color and box shadow will be set dynamically via JS */
+            padding: 20px; /* Diminui o padding */
+            z-index: 20;
+            display: none;
+            text-align: center;
+            width: 60%; /* Diminui o tamanho */
+            max-width: 450px; /* Limite para desktop */
+            height: auto;
+            max-height: 90%; /* Limite máximo */
+            position: absolute;
+            top: 50%;
+            left: 50%; /* Always centered */
+            transform: translate(-50%, -50%); /* Always centered */
+            border-radius: 15px;
+            flex-direction: column; /* Garante que os itens se empilhem */
+        }
+        #game-over, #confirm-end-session-menu {
+            box-shadow: 0 0 35px rgba(136, 255, 0, 0.7), 0 0 50px rgba(81, 255, 0, 0.4);
+        }
+        #pause-menu {
+            box-shadow: 0 0 25px rgba(50, 205, 50, 0.6), 0 0 40px rgba(50, 205, 50, 0.3);
+        }
+
+        #music-menu { /* Music menu specific styles, similar to player-image-menu */
+            border: 4px solid #800080; /* Purple for consistency with customize menu */
+            box-shadow: 0 0 25px rgba(128, 0, 128, 0.6), 0 0 40px rgba(128, 0, 128, 0.3);
+            padding: 20px;
+            z-index: 20;
+            text-align: center;
+            width: 60%;
+            max-width: 450px;
+            height: auto;
+            max-height: 90%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 15px;
+            flex-direction: column;
+            background-color: rgba(10, 0, 10, 0.95); /* Darker purple background */
+        }
+
+        /* How to Play Menu Styles */
+        #how-to-play-menu {
+            background-color: rgba(15, 20, 25, 0.95); /* Darker blue-gray background */
+            border: 4px solid #00FFFF; /* Cyan border */
+            box-shadow: 0 0 25px rgba(0, 255, 255, 0.6), 0 0 40px rgba(0, 255, 255, 0.3);
+            padding: 30px;
+            text-align: center;
+            width: 80%;
+            max-width: 700px;
+            height: auto;
+            max-height: 90%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 15px;
+            flex-direction: column;
+        }
+
+        #how-to-play-menu .menu-title {
+            color: #00FFFF; /* Cyan for title */
+            text-shadow: 0 0 10px #00FFFF, 0 0 20px rgba(0, 255, 255, 0.7);
+            margin-bottom: 25px;
+        }
+
+        .how-to-play-content {
+            font-family: 'Electrolize', sans-serif;
+            font-size: 16px;
+            line-height: 1.8;
+            color: var(--bluish-white);
+            max-height: 400px; /* Adjust as needed for content length */
+            overflow-y: auto; /* Enable scrolling if content overflows */
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid rgba(0, 255, 255, 0.2);
+            border-radius: 8px;
+            background-color: rgba(0, 15, 25, 0.7);
+            box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.1);
+        }
+
+        .how-to-play-content h3 {
+            font-family: 'Press Start 2P', cursive;
+            color: #FFD700; /* Gold for sub-headings */
+            text-shadow: 0 0 5px #FFD700;
+            margin-top: 15px;
+            margin-bottom: 10px;
+            font-size: 20px;
+        }
+
+        .how-to-play-content p {
+            margin-bottom: 8px;
+        }
+
+        .how-to-play-content strong {
+            color: #90EE90; /* Light green for important text */
+        }
+
+        .highlight-key {
+            color: #FF69B4; /* Hot pink for key highlights */
+            text-shadow: 0 0 5px #FF69B4;
+            font-weight: bold;
+        }
+
+        .highlight-number {
+            color: #00FF00; /* Bright green for numbers */
+            text-shadow: 0 0 5px #00FF00;
+            font-weight: bold;
+        }
+
+        .highlight-exp {
+            color: #FFFF00; /* Yellow for EXP */
+            text-shadow: 0 0 5px #FFFF00;
+            font-weight: bold;
+        }
+
+        .highlight-ability {
+            color: #00BFFF; /* Deep Sky Blue for Abilities */
+            text-shadow: 0 0 5px #00BFFF;
+            font-weight: bold;
+        }
+
+        .highlight-final {
+            color: #FF4500; /* OrangeRed for final challenge */
+            text-shadow: 0 0 5px #FF4500, 0 0 10px rgba(255, 69, 0, 0.5);
+            font-weight: bold;
+        }
+
+
+        #title {
+            font-family: 'Electrolize', sans-serif; /* Fonte mais futurista para o título */
+            font-size: 56px; /* Tamanho maior */
+            color: #00FFFF; /* Ciano neon */
+            text-shadow: 0 0 15px #00FFFF, 0 0 25px #00FFFF, 0 0 40px rgba(0, 255, 255, 0.6);
+            margin-bottom: 60px;
+            text-align: center;
+            line-height: 1;
+            animation: neonPulse 2s ease-in-out infinite alternate; /* Animação de pulso neon */
+            letter-spacing: 5px; /* Espaçamento entre letras */
+        }
+
+        @keyframes neonPulse {
+            from {
+                text-shadow: 0 0 10px #00FFFF, 0 0 20px #00FFFF, 0 0 30px #00FFFF, 0 0 40px #00FFFF;
+                transform: scale(1);
+            }
+            to {
+                text-shadow: 0 0 15px #00FFFF, 0 0 30px #00FFFF, 0 0 45px #00FFFF, 0 0 60px #00FFFF;
+                transform: scale(1.02);
+            }
+        }
+
+        /* Fundo animado para o menu principal com estrelas e padrões futuristas */
+        #main-menu {
+            background:
+                radial-gradient(circle at top left, #000000 0%, transparent 40%),
+                radial-gradient(circle at bottom right, #000000 0%, transparent 40%),
+                repeating-linear-gradient(45deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.8) 2px, transparent 2px, transparent 8px),
+                linear-gradient(135deg, #132533 50%, #132533 50%);
+            background-size: 100% 100%, 100% 100%, 16px 16px, 100% 100%;
+            animation: backgroundPan 30s linear infinite alternate;
+        }
+
+        @keyframes backgroundPan {
+            0% { background-position: 0% 0%; }
+            100% { background-position: 100% 100%; }
+        }
+
+        .menu-option {
+            font-family: 'Press Start 2P', cursive;
+            font-size: 24px;
+            color: #00FFFF; /* Ciano neon */
+            margin: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-shadow: 0 0 8px #00FFFF;
+            padding: 12px 25px;
+            border: 3px solid #00FFFF;
+            background-color: rgba(10, 10, 20, 0.8); /* Fundo escuro com leve azul */
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+        }
+
+        .menu-option:hover, .menu-option.selected { /* Added .selected style */
+            color: #FF00FF; /* Rosa neon no hover */
+            text-shadow: 0 0 15px #FF00FF;
+            transform: scale(1.1);
+            border-color: #FF00FF;
+            background-color: rgba(20, 0, 30, 0.9);
+            box-shadow: 0 0 15px rgba(255, 0, 255, 0.7);
+        }
+
+        #game-ui, #game-ui-right, #center-stats {
+            position: absolute;
+            font-size: 12px;
+            color: #90EE90; /* Verde claro neon */
+            z-index: 5;
+            background-color: rgba(15, 30, 45, 0.9); /* Azul escuro semi-transparente */
+            padding: 12px;
+            border: 2px solid #00FF7F; /* Verde esmeralda neon */
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 255, 127, 0.5);
+            display: none;
+            font-family: 'Electrolize', sans-serif;
+        }
+
+        #game-ui {
+            top: 15px;
+            left: 15px;
+        }
+
+        #game-ui-right {
+            top: 15px;
+            right: 15px;
+            text-align: right;
+        }
+
+        #center-stats {
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            background-color: rgba(51, 95, 109, 0.774); /* Vermelho escuro semi-transparente */
+            border: 2px solid #40b3d6; /* Tomate neon */
+            box-shadow: 0 0 10px rgba(24, 28, 238, 0.9);
+        }
+
+        .health-bar {
+            height: 12px;
+            background-color: #530606; /* Vermelho escuro para fundo de barra de vida */
+            margin-bottom: 5px;
+            border: 1px solid #02520f; /* Vermelho vibrante */
+            width: 180px; /* Mais largo */
+            border-radius: 6px;
+            box-shadow: 0 0 5px #02520f;
+        }
+
+        .health-fill {
+            height: 100%;
+            background-color: #2eec15; /* Verde neon para preenchimento de vida */
+            width: 100%;
+            border-radius: 6px;
+            transition: width 0.2s ease-out;
+        }
+
+        .exp-bar {
+            height: 12px;
+            background-color: #000033; /* Azul muito escuro */
+            margin-bottom: 10px;
+            border: 1px solid #00FFFF; /* Ciano neon */
+            width: 180px; /* Mais largo */
+            border-radius: 6px;
+            box-shadow: 0 0 5px rgba(0, 255, 255, 0.6);
+        }
+
+        .exp-fill {
+            height: 100%;
+            background-color: #00FFFF; /* Ciano neon para preenchimento de EXP */
+            width: 0%;
+            border-radius: 6px;
+            transition: width 0.2s ease-out;
+        }
+
+        #upgrade-selection-title {
+            font-family: 'Electrolize', sans-serif;
+            /* Color will be set dynamically via JS */
+            font-size: 22px; /* Diminui o tamanho da fonte */
+            margin-bottom: 15px; /* Reduz a margem */
+            /* Text shadow will be set dynamically via JS */
+        }
+        /* New style for the sub-title "ESCOLHA SUA MELHORIA:" */
+        #upgrade-selection-subtitle {
+            font-family: 'Electrolize', sans-serif;
+            color: var(--bluish-white); /* Default bluish-white, can be overridden if needed */
+            font-size: 18px; /* Diminui o tamanho da fonte */
+            margin-top: -10px; /* Pull it up closer to the title */
+            margin-bottom: 20px; /* Reduz a margem */
+            text-shadow: 0 0 5px rgba(224, 224, 224, 0.5);
+        }
+
+
+        .upgrade-option-item {
+            font-family: 'Press Start 2P', cursive;
+            color: #90EE90; /* Verde claro neon para textos */
+            font-size: 12px; /* Diminui o tamanho da fonte */
+            margin: 10px; /* Reduz a margem */
+            padding: 10px; /* Reduz o padding */
+            border: 2px solid #40E0D0; /* Turquesa - cor padrão do box */
+            cursor: pointer;
+            transition: all 0.3s;
+            background-color: rgba(20, 30, 40, 0.7);
+            border-radius: 10px;
+            box-shadow: 0 0 8px rgba(64, 224, 208, 0.4);
+        }
+
+        .upgrade-option-item:hover, .upgrade-option-item.selected { /* Added .selected style */
+            background-color: #40E0D0; /* Turquesa no hover */
+            color: #000; /* Texto preto no hover para contraste */
+            transform: scale(1.07);
+            text-shadow: none;
+        }
+
+        /* Cores específicas para tipos de upgrade dentro do menu (apenas o BOX será distinto) */
+        .upgrade-option-item.special {
+            border-color: #FF69B4; /* Rosa choque */
+            box-shadow: 0 0 8px rgba(255, 105, 180, 0.6);
+        }
+        .upgrade-option-item.special:hover, .upgrade-option-item.special.selected {
+            background-color: #FF69B4;
+        }
+
+        .upgrade-option-item.legendary {
+            border-color: #FFFF00; /* Amarelo neon */
+            box-shadow: 0 0 12px rgba(255, 255, 0, 0.8);
+        }
+        .upgrade-option-item.legendary:hover, .upgrade-option-item.legendary.selected {
+            background-color: #FFFF00;
+            color: #000;
+        }
+
+        /* TELA DE GAME OVER - Responsividade */
+        #game-over {
+            background-color: rgba(30, 0, 0, 0.95); /* Vermelho escuro */
+            padding: 40px;
+            z-index: 30;
+            display: none;
+            text-align: center;
+            width: 70%; /* Diminui o tamanho */
+            max-width: 500px; /* Limite máximo */
+            height: auto;
+            max-height: 80%; /* Limite máximo */
+            border-radius: 15px;
+            box-shadow: 0 0 35px rgba(255, 69, 0, 0.8);
+            
+            /* Centralizar na tela */
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #final-screen-title {
+            font-family: 'Electrolize', sans-serif;
+            color: #FF4500; /* Laranja avermelhado */
+            font-size: 42px;
+            margin-bottom: 25px;
+            text-shadow: 0 0 10px #FF4500, 0 0 20px rgba(255, 69, 0, 0.7);
+        }
+
+        #final-screen-stats {
+            color: #ADD8E6; /* Azul claro para stats */
+            font-size: 16px;
+            margin-bottom: 25px;
+            line-height: 1.8;
+            max-height: 450px;
+            overflow-y: auto;
+            padding: 15px;
+            border: 1px solid rgba(255, 99, 71, 0.3); /* Tomate suave */
+            border-radius: 10px;
+            background-color: rgba(30, 0, 0, 0.6);
+        }
+
+        .player-final-stats {
+            border: 1px solid rgba(255, 165, 0, 0.4); /* Laranja neon suave */
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+            background-color: rgba(30, 10, 0, 0.7);
+        }
+        .player-final-stats h3 {
+            color: #FFD700; /* Ouro neon */
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        .player-final-stats div {
+            margin-bottom: 6px;
+        }
+        .player-final-abilities {
+            font-size: 14px;
+            margin-top: 10px;
+            color: #90EE90;
+        }
+
+        #back-to-main-from-final-screen {
+            color: #4df822; /* Verde limão */
+            font-size: 22px;
+            padding: 12px 25px;
+            cursor: pointer;
+            transition: all 0.3s;
+            background-color: rgba(5, 30, 0, 0.7);
+            margin-top: 25px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(99, 205, 50, 0.5);
+            font-family: 'Press Start 2P', cursive;
+        }
+
+        #back-to-main-from-final-screen:hover, #back-to-main-from-final-screen.selected {
+            background-color: #63cd32;
+            color: #000;
+            transform: scale(1.05);
+            text-shadow: none;
+        }
+
+        .ability-icon {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            margin-right: 8px;
+            vertical-align: middle;
+            border-radius: 4px;
+            border: 1px solid rgba(255,255,255,0.3);
+            image-rendering: pixelated; /* Ensure icons are pixelated */
+        }
+
+        /* Novos estilos para a estrutura e elementos dos menus */
+        .menu-title {
+            font-family: 'Electrolize', sans-serif;
+            font-size: 28px; /* Diminui o tamanho da fonte */
+            color: #00FFFF;
+            text-shadow: 0 0 10px #00FFFF, 0 0 20px rgba(0, 255, 255, 0.7);
+            margin-bottom: 25px; /* Reduz a margem */
+            text-align: center;
+            letter-spacing: 2px;
+        }
+
+        .file-input {
+            margin: 10px 0; /* Reduz a margem */
+            padding: 8px; /* Reduz o padding */
+            background-color: rgba(0, 50, 50, 0.4);
+            color: #00FFFF;
+            border: 1px solid #00FFFF;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 12px; /* Diminui o tamanho da fonte */
+            width: 85%;
+            max-width: 350px;
+            box-shadow: 0 0 8px rgba(0, 255, 255, 0.2);
+        }
+
+        .name-input {
+            margin: 8px 0; /* Reduz a margem */
+            padding: 8px; /* Reduz o padding */
+            background-color: rgba(50, 0, 50, 0.4);
+            color: #FF00FF;
+            border: 1px solid #FF00FF;
+            border-radius: 5px;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 12px; /* Diminui o tamanho da fonte */
+            width: 85%;
+            max-width: 350px;
+            text-align: center;
+            box-shadow: 0 0 8px rgba(255, 0, 255, 0.2);
+        }
+
+        .info-text {
+            font-size: 13px; /* Diminui o tamanho da fonte */
+            margin-top: 8px; /* Reduz a margem */
+            color: #90EE90;
+            font-family: 'Electrolize', sans-serif;
+        }
+
+        .menu-button {
+            font-size: 18px; /* Diminui o tamanho da fonte */
+            color: #32CD32; /* Verde limão */
+            padding: 8px 20px; /* Reduz o padding */
+            border: 2px solid #32CD32;
+            background-color: rgba(0, 30, 0, 0.7);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 12px; /* Reduz a margem */
+            font-family: 'Press Start 2P', cursive;
+            text-shadow: 0 0 8px #32CD32;
+            box-shadow: 0 0 10px rgba(50, 205, 50, 0.5);
+        }
+
+        .menu-button:hover:not(:disabled), .menu-button.selected:not(:disabled) {
+            background-color: #32CD32;
+            color: #000;
+            transform: scale(1.05);
+            text-shadow: none;
+            box-shadow: 0 0 15px rgba(50, 205, 50, 0.8);
+        }
+
+        .menu-button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            text-shadow: none;
+            box-shadow: none;
+        }
+
+        .back-button {
+            margin-top: 30px; /* Reduz a margem */
+            font-size: 18px; /* Diminui o tamanho da fonte */
+            color: #ae00ff; /* Rosa neon */
+            border-color: #ae00ff;
+            text-shadow: 0 0 8px #ae00ff;
+            box-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
+        }
+
+        .back-button:hover:not(:disabled), .back-button.selected:not(:disabled) {
+            background-color: rgb(238, 130, 248);
+            color: #000;
+            text-shadow: none;
+        }
+
+        #player-image-menu {
+            flex-direction: column; /* Alterado para coluna para empilhar */
+            justify-content: center; /* Centralizar os itens verticalmente */
+            align-items: center;
+            padding-top: 25px; /* Adicionar preenchimento no topo para o título */
+            padding-bottom: 15px; /* Adicionar preenchimento na parte inferior para o botão */
+        }
+
+        #player-image-menu .menu-title {
+            width: 100%;
+            margin-bottom: 20px; /* Ajuste a margem inferior do título */
+        }
+
+        .player-image-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 8px; /* Reduzir a margem inferior para empilhamento */
+            flex: 0 0 auto;
+            width: 450px; /* Mais largo */
+            max-width: 80%; /* Ajuste para melhor responsividade */
+            padding: 15px; /* Reduz o padding */
+            border: 2px solid #00FFFF; /* Ciano neon */
+            border-radius: 12px;
+            background-color: rgba(10, 20, 30, 0.8);
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.4);
+        }
+
+        .image-preview {
+            width: 50px; /* Maior */
+            height: 50px; /* Maior */
+            border-radius: 50%;
+            object-fit: cover;
+            margin-top: 7px;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+            image-rendering: pixelated; /* Ensure icons are pixelated */
+        }
+        .image-preview.player1-border {
+            border: 3px solid #00FFFF; /* Cyan border for player 1 */
+        }
+        .image-preview.player2-border {
+            border: 3px solid #800080; /* Purple border for player 2 */
+        }
+
+        #end-session-button-container {
+            position: absolute;
+            /* Ajustado para ficar abaixo do centro-stats e centralizado */
+            top: 88px; /* Moved down by 3px from 85px */
+            left: 50%;
+            transform: translateX(-50%); /* Centralizado horizontalmente */
+            z-index: 5;
+            display: none;
+        }
+        #pause-button {
+            margin: 0;
+            padding: 8px 15px;
+            font-size: 16px;
+            color: #ae00ff; /* Rosa neon */
+            border-color: #ae00ff;
+            text-shadow: 0 0 8px #ae00ff;
+            box-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
+        }
+        #pause-button:hover, #pause-button.selected {
+            background-color: rgb(238, 130, 248);
+            color: #000;
+            text-shadow: none;
+        }

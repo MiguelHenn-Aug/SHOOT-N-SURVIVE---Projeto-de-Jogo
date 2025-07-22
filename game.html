@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SHOOT N' SURVIVE</title>
+    <!-- Google Fonts for retro/futuristic style -->
+    <!-- LINKS DE FONTES CORRIGIDOS -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Electrolize&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Title Screen (New) -->
+    <div id="title-screen" class="overlay">
+        <h1 id="title-screen-text">SHOOT N' SURVIVE</h1>
+        <p id="press-any-key-text">Pressione uma TECLA ou o MOUSE para iniciar</p>
+    </div>
+
+    <!-- Default Audio Elements for Background Music -->
+    <!-- SoundHelix songs are royalty-free for personal and commercial use -->
+    <!-- To use your own local files, replace the src attribute with a relative path (e.g., "music/main_menu.mp3") -->
+    <audio id="mainMenuMusic" src="audio/Title Screen Theme.mp3" loop preload="auto"></audio>
+    <audio id="gameMusic" src="audio/Game Theme.mp3" loop preload="auto"></audio>
+    <audio id="gameOverMusic" src="audio/End Theme.mp3" preload="auto"></audio>
+
+    <!-- Main Menu -->
+    <div id="main-menu" class="overlay" style="display: none;">
+        <h1 id="title">SHOOT N' SURVIVE</h1>
+        <div class="menu-option" id="play-game-option">INICIAR JOGO</div>
+        <div class="menu-option" id="how-to-play-option">COMO JOGAR</div>
+        <div class="menu-option" id="music-option">MÚSICAS</div>
+        <div class="menu-option" id="players-option">PERSONALIZAR</div>
+    </div>
+
+    <!-- Select Sub-Menu (initially hidden) -->
+    <div id="player-select-menu" class="overlay" style="display: none;">
+        <h2 class="menu-title">ESCOLHA A QUANTIDADE DE ATIRADORES</h2>
+        <div class="menu-option" id="single-player">1 ATIRADOR</div>
+        <div class="menu-option" id="multi-player">2 ATIRADORES</div>
+        <div class="menu-option back-button" id="back-to-main-from-player-select">RETORNAR</div>
+    </div>
+
+    <!-- How to Play Menu (New) -->
+    <div id="how-to-play-menu" class="overlay" style="display: none;">
+        <h2 class="menu-title">COMO JOGAR</h2>
+        <div class="how-to-play-content">
+            <h3>MOVIMENTAÇÃO:</h3>
+            <p><strong>ATIRADOR 1:</strong> WASD + <span class="highlight-key">ESPAÇO</span> para Atirar</p>
+            <p><strong>ATIRADOR 2:</strong> Setas de Direção + <span class="highlight-key">ENTER</span> para Atirar</p>
+            <br>
+            <h3>OBJETIVO DO JOGO:</h3>
+            <p>Sobreviva a <span class="highlight-number">50 ONDAS</span> de inimigos e chefes!</p>
+            <p>Cada inimigo derrotado concede <span class="highlight-exp">EXPERIÊNCIA</span> para subir de nível e desbloquear novas e poderosas <span class="highlight-ability">HABILIDADES</span>.</p>
+            <p>Prepare-se para o <span class="highlight-final">DESAFIO FINAL!</span></p>
+        </div>
+        <div class="menu-option back-button" id="back-to-main-from-how-to-play">VOLTAR</div>
+    </div>
+
+    <!-- Music Menu (New) -->
+    <div id="music-menu" class="overlay" style="display: none;">
+        <h2 class="menu-title" style="color: #FF00FF; text-shadow: 0 0 10px #FF00FF, 0 0 20px rgba(255, 0, 255, 0.7);">CONFIGURAÇÕES DE MÚSICA</h2>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 15px; margin-top: 20px; width: 80%; max-width: 400px;">
+            <label for="music-volume" class="info-text">VOLUME DA MÚSICA:</label>
+            <input type="range" id="music-volume" min="0" max="1" step="0.05" value="1" style="width: 100%;">
+            <button id="toggle-music" class="menu-button" style="color: #FFD700; border-color: #FFD700; background-color: rgba(30, 30, 0, 0.7); text-shadow: 0 0 8px #FFD700; box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);">DESLIGAR MÚSICA</button>
+            <input type="file" id="music-file-input" accept="audio/*" class="file-input" style="border-color: #FF00FF; color: #FF00FF; box-shadow: 0 0 8px rgba(255, 0, 255, 0.2);">
+            <div id="current-music-info" class="info-text" style="color: #FF69B4;">Nenhuma música selecionada</div>
+            <div style="display: flex; flex-direction: row; gap: 15px;">
+                <button id="play-music" class="menu-button" style="color: #FFD700; border-color: #FFD700; background-color: rgba(30, 30, 0, 0.7); text-shadow: 0 0 8px #FFD700; box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);">TOCAR</button>
+                <button id="pause-music" class="menu-button" style="color: #FFD700; border-color: #FFD700; background-color: rgba(30, 30, 0, 0.7); text-shadow: 0 0 8px #FFD700; box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);">PAUSAR</button>
+                <button id="clear-music" class="menu-button" style="color: #FFD700; border-color: #FFD700; background-color: rgba(30, 30, 0, 0.7); text-shadow: 0 0 8px #FFD700; box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);">REMOVER</button>
+            </div>
+        </div>
+        <div class="menu-option back-button" id="back-to-main-from-music">VOLTAR</div>
+    </div>
+
+
+    <!-- Player Image Menu (initially hidden) -->
+    <div id="player-image-menu" class="overlay" style="display: none;">
+        <h2 class="menu-title">PERSONALIZAR ATIRADORES</h2>
+        <div class="player-image-section">
+            <h3>ATIRADOR 1</h3>
+            <input type="text" id="player1-name-input" class="name-input" value="ATIRADOR 1">
+            <input type="file" id="player1-image-input" accept="image/*" class="file-input">
+            <img id="player1-preview" class="image-preview" src="https://placehold.co/60x60/3366ff/ffffff?text=N1" alt="Preview N1">
+        </div>
+        <div class="player-image-section">
+            <h3>ATIRADOR 2</h3>
+            <input type="text" id="player2-name-input" class="name-input" value="ATIRADOR 2">
+            <input type="file" id="player2-image-input" accept="image/*" class="file-input">
+            <img id="player2-preview" class="image-preview" src="https://placehold.co/60x60/9933ff/ffffff?text=N2" alt="Preview N2">
+        </div>
+        <!-- O botão de retorno agora está 10px abaixo da personalização do Atirador 2 -->
+        <div class="menu-option back-button" id="back-to-main-from-player-image" style="margin-top: 10px;">VOLTAR</div>
+    </div>
+
+    <div id="game-ui">
+        <div id="p1-name-display">ATIRADOR 1</div>
+        <div>VIDA: <span id="p1-health">100</span></div>
+        <div class="health-bar"><div class="health-fill" id="p1-health-bar"></div></div>
+        <div>NÍVEL: <span id="p1-level">1</span></div>
+        <div>EXP: <span id="p1-exp">0</span>/<span id="p1-exp-needed">10</span></div>
+        <div class="exp-bar"><div class="exp-fill" id="p1-exp-bar"></div></div>
+        <div>Nº DE PROJÉTEIS: <span id="p1-projectiles">1</span></div>
+        <div>DANO: <span id="p1-damage">10</span></div>
+        <div>VELOCIDADE DE DISPARO: <span id="p1-fire-rate"></span></div> <!-- ADDED SPAN HERE -->
+        <div id="p1-abilities"></div>
+    </div>
+
+    <div id="game-ui-right">
+        <div id="p2-name-display">ATIRADOR 2</div>
+        <div>VIDA: <span id="p2-health">100</span></div>
+        <div class="health-bar"><div class="health-fill" id="p2-health-bar"></div></div>
+        <div>NÍVEL: <span id="p2-level">1</span></div>
+        <div>EXP: <span id="p2-exp">0</span>/<span id="p2-exp-needed">10</span></div>
+        <div class="exp-bar"><div class="exp-fill" id="p2-exp-bar"></div></div>
+        <div>Nº DE PROJÉTEIS: <span id="p2-projectiles">1</span></div>
+        <div>DANO: <span id="p2-damage">10</span></div>
+        <div>VELOCIDADE DE DISPARO: <span id="p2-fire-rate"></span></div> <!-- ADDED SPAN HERE -->
+        <div id="p2-abilities"></div>
+    </div>
+
+    <div id="center-stats">
+        <div>TEMPO: <span id="game-time">00:00</span></div>
+        <div>INIMIGOS DERROTADOS: <span id="enemies-defeated">0</span></div>
+        <div>NÍVEL DE AMEAÇA: <span id="wave-level">1</span></div>
+    </div>
+
+    <div id="end-session-button-container">
+        <div class="menu-option" id="pause-button">PAUSAR</div>
+    </div>
+
+    <!-- Pause Menu (New) -->
+    <div id="pause-menu" class="overlay" style="display: none;">
+        <h2 class="menu-title">SESSÃO PAUSADA</h2>
+        <div class="menu-option" id="resume-game-option">VOLTAR</div>
+        <div class="menu-option" id="pause-menu-how-to-play-option">COMO JOGAR</div> <!-- NEW OPTION -->
+        <div class="menu-option" id="pause-menu-music-option">MÚSICA</div>
+        <div class="menu-option" id="pause-menu-end-session-option">ENCERRAR SESSÃO</div>
+    </div>
+
+    <!-- Confirm End Session Menu (New) -->
+    <div id="confirm-end-session-menu" class="overlay" style="display: none;">
+        <h2 class="menu-title" style="color: #FF4500; text-shadow: 0 0 5px #FF4500;">ENCERRAR SESSÃO?</h2>
+        <div class="menu-option" id="cancel-end-session">NÃO</div>
+        <div class="menu-option" id="proceed-end-session">SIM</div>
+    </div>
+
+    <!-- Unified Upgrade Selection Menu -->
+    <div id="upgrade-selection-menu" class="overlay">
+        <!-- Upgrade title and options will be dynamically inserted here -->
+    </div>
+
+    <div id="game-over" class="overlay">
+        <div id="final-screen-title">SESSÃO ENCERRADA</div>
+        <div id="final-screen-stats">
+            <div>TEMPO DE JOGO: <span id="final-time">00:00</span></div>
+            <div>INIMIGOS DERROTADOS: <span id="final-enemies">0</span></div>
+            <div>NÍVEL DE AMEAÇA ATINGIDO: <span id="final-wave">1</span></div>
+            <div id="final-player-stats">
+                <!-- Player specific stats will be inserted here -->
+            </div>
+        </div>
+        <div class="menu-option" id="back-to-main-from-final-screen">VOLTAR AO INÍCIO</div>
+    </div>
+
+    <div id="controls-info">
+    </div>
+    <script src="js/enemy.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/gameFunctions.js"></script>
+</body>
+</html>
