@@ -1,4 +1,4 @@
-# SHOOT-N-SURVIVE---Projeto-de-Jogo
+# SHOOT-N-SURVIVE---Projeto-com-IA
 Este jogo para navegador faz parte de um projeto pessoal com objetivo de testar as capacidades de codificação de diferentes Inteligências Artificiais. Todos os aspectos do código foram criados inteiramente por IA e mostram o poder que essa tecnologia tem a oferecer à partir de boas práticas de uso.
 
 A base desse projeto surgiu da ideia de testar como diferentes IAs podem auxiliar na codificação, não apenas isso, mas também fazendo-as trabalhar em conjunto sem que nem mesmo soubessem. Decidi colocar essa ideia em prática no início de junho e levei pelo menos 1 mês para chegar nos estágios finais do jogo, porém, decidi postá-lo apenas quando atingisse os seguintes objetivos:
