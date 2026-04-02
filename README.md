@@ -3,7 +3,7 @@ Este jogo para navegador faz parte de um projeto pessoal com objetivo de testar 
 
 A base desse projeto surgiu da ideia de testar como diferentes IAs podem auxiliar na codificação, não apenas isso, mas também fazendo-as trabalhar em conjunto sem que nem mesmo soubessem. Decidi colocar essa ideia em prática no início de junho e levei pelo menos 1 mês para chegar nos estágios finais do jogo, porém, decidi postá-lo apenas quando atingisse os seguintes objetivos:
 
-REQUISITOS PARA O MENU, SUAS OPÇÕES E FUNCIONAMENTO:
+### REQUISITOS PARA O MENU, SUAS OPÇÕES E FUNCIONAMENTO:
 
 N.1 - O jogo deve possuir 2 telas principais: MENU INICIAL, onde estarão diferentes opções de personalização e TELA DE JOGO, onde ocorrerá a gameplay;
 
