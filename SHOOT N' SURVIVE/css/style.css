@@ -402,17 +402,17 @@
             padding: 10px; /* Reduz o padding */
             border: 2px solid #40E0D0; /* Turquesa - cor padrão do box */
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.2s ease;
             background-color: rgba(20, 30, 40, 0.7);
             border-radius: 10px;
-            box-shadow: 0 0 8px rgba(64, 224, 208, 0.4);
+            box-shadow: 0 0 8px rgba(64, 224, 208, 0.3);
         }
 
         .upgrade-option-item:hover, .upgrade-option-item.selected { /* Added .selected style */
-            background-color: #40E0D0; /* Turquesa no hover */
-            color: #000; /* Texto preto no hover para contraste */
-            transform: scale(1.07);
-            text-shadow: none;
+            background-color: rgba(64, 224, 208, 0.18);
+            color: #E0E0E0;
+            transform: scale(1.05);
+            box-shadow: 0 0 14px rgba(64, 224, 208, 0.28);
         }
 
         /* Cores específicas para tipos de upgrade dentro do menu (apenas o BOX será distinto) */
@@ -421,7 +421,9 @@
             box-shadow: 0 0 8px rgba(255, 105, 180, 0.6);
         }
         .upgrade-option-item.special:hover, .upgrade-option-item.special.selected {
-            background-color: #FF69B4;
+            background-color: rgba(255, 105, 180, 0.18);
+            color: #E0E0E0;
+            box-shadow: 0 0 14px rgba(255, 105, 180, 0.28);
         }
 
         .upgrade-option-item.legendary {
@@ -429,8 +431,9 @@
             box-shadow: 0 0 12px rgba(255, 255, 0, 0.8);
         }
         .upgrade-option-item.legendary:hover, .upgrade-option-item.legendary.selected {
-            background-color: #FFFF00;
-            color: #000;
+            background-color: rgba(255, 255, 0, 0.18);
+            color: #E0E0E0;
+            box-shadow: 0 0 16px rgba(255, 255, 0, 0.3);
         }
 
         /* TELA DE GAME OVER - Responsividade */

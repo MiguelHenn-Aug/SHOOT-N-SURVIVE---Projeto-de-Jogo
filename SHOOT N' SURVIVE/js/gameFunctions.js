@@ -61,12 +61,255 @@
         // Scale factor to increase player, enemy, and projectile sizes by 50%
         const GAME_SCALE_FACTOR = 1.5;
 
+                // World and camera settings (allow world larger than viewport)
+                let worldWidth = canvas.width * 3;
+                let worldHeight = canvas.height * 3;
+                let cameraX = canvas.width / 2;
+                let cameraY = canvas.height / 2;
+                const CAMERA_LERP = 0.12; // smoothing
+                let backgroundAnimationTime = 0; // ms used for animated stars/planets
+                const galaxyStars = [];
+                const galaxyPlanets = [];
+                let bigGalaxy = null;
+                const galaxyStarCount = 440;
+                const galaxyPlanetCount = 10;
+                // Viewport helpers (updated by updateCamera)
+                window.viewLeft = cameraX - canvas.width / 2;
+                window.viewRight = cameraX + canvas.width / 2;
+                window.viewTop = cameraY - canvas.height / 2;
+                window.viewBottom = cameraY + canvas.height / 2;
+
+                function updateCamera() {
+                    if (players.length === 0) return;
+                    let targetX, targetY;
+                    const hw = canvas.width / 2;
+                    const hh = canvas.height / 2;
+
+                    if (singlePlayer || players.length === 1) {
+                        targetX = players[0].x;
+                        targetY = players[0].y;
+                        cameraX += (targetX - cameraX) * CAMERA_LERP;
+                        cameraY += (targetY - cameraY) * CAMERA_LERP;
+                    } else {
+                        // Compute span between players
+                        const p1 = players[0];
+                        const p2 = players[1];
+                        const minX = Math.min(p1.x, p2.x);
+                        const maxX = Math.max(p1.x, p2.x);
+                        const minY = Math.min(p1.y, p2.y);
+                        const maxY = Math.max(p1.y, p2.y);
+
+                        // If players fit inside viewport, center on midpoint
+                        const spanX = maxX - minX;
+                        const spanY = maxY - minY;
+                        const midX = (minX + maxX) / 2;
+                        const midY = (minY + maxY) / 2;
+
+                        // If players are farther apart than viewport, we avoid moving camera further
+                        if (spanX > canvas.width - 4 || spanY > canvas.height - 4) {
+                            // If both players are near the screen edges (both touching same edge), freeze camera
+                            const bothTouchLeft = (p1.x - (cameraX - hw) < 8) && (p2.x - (cameraX - hw) < 8);
+                            const bothTouchRight = ((cameraX + hw) - p1.x < 8) && ((cameraX + hw) - p2.x < 8);
+                            const bothTouchTop = (p1.y - (cameraY - hh) < 8) && (p2.y - (cameraY - hh) < 8);
+                            const bothTouchBottom = ((cameraY + hh) - p1.y < 8) && ((cameraY + hh) - p2.y < 8);
+
+                            if (bothTouchLeft || bothTouchRight || bothTouchTop || bothTouchBottom) {
+                                // Do not move camera to avoid moving past world edges and keep both visible
+                            } else {
+                                // Move camera slowly toward midpoint but limited so it doesn't try to include impossible span
+                                cameraX += (midX - cameraX) * CAMERA_LERP;
+                                cameraY += (midY - cameraY) * CAMERA_LERP;
+                            }
+                        } else {
+                            // Players fit comfortably in viewport: ensure camera keeps both in view
+                            // Compute allowed camera ranges that include both players
+                            const allowedMinX = maxX - hw;
+                            const allowedMaxX = minX + hw;
+                            const allowedMinY = maxY - hh;
+                            const allowedMaxY = minY + hh;
+
+                            // Choose target within allowed ranges (prefer midpoint)
+                            targetX = Math.min(allowedMaxX, Math.max(allowedMinX, midX));
+                            targetY = Math.min(allowedMaxY, Math.max(allowedMinY, midY));
+
+                            cameraX += (targetX - cameraX) * CAMERA_LERP;
+                            cameraY += (targetY - cameraY) * CAMERA_LERP;
+                        }
+                    }
+
+                    // Clamp camera within world bounds so we don't show empty space
+                    cameraX = Math.max(canvas.width / 2, Math.min(worldWidth - canvas.width / 2, cameraX));
+                    cameraY = Math.max(canvas.height / 2, Math.min(worldHeight - canvas.height / 2, cameraY));
+
+                    window.viewLeft = cameraX - canvas.width / 2;
+                    window.viewRight = cameraX + canvas.width / 2;
+                    window.viewTop = cameraY - canvas.height / 2;
+                    window.viewBottom = cameraY + canvas.height / 2;
+                    // Expose world size to other scripts
+                    window.worldWidth = worldWidth;
+                    window.worldHeight = worldHeight;
+                }
+
         // Utility function to calculate distance between two points
         function distance(x1, y1, x2, y2) {
             const dx = x2 - x1;
             const dy = y2 - y1;
             return Math.sqrt(dx * dx + dy * dy);
         }
+
+        function drawGalaxyBackground() {
+            ctx.save();
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.globalAlpha = 1;
+            // Outer galaxy gradient background
+            const bgGradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            bgGradient.addColorStop(0, '#05020f');
+            bgGradient.addColorStop(0.25, '#0c0830');
+            bgGradient.addColorStop(0.6, '#120a3c');
+            bgGradient.addColorStop(1, '#04010b');
+            ctx.fillStyle = bgGradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const screenCenterX = canvas.width / 2;
+            const screenCenterY = canvas.height / 2;
+            const offsetX = cameraX - worldWidth / 2;
+            const offsetY = cameraY - worldHeight / 2;
+
+            // Draw the single large central galaxy.
+            if (bigGalaxy) {
+                const gx = ((bigGalaxy.worldX - cameraX) * bigGalaxy.parallax) + screenCenterX;
+                const gy = ((bigGalaxy.worldY - cameraY) * bigGalaxy.parallax) + screenCenterY;
+                const galaxyRotation = bigGalaxy.rotationOffset + backgroundAnimationTime / 14500;
+                const baseRadius = bigGalaxy.radius;
+
+                ctx.save();
+                ctx.translate(gx, gy);
+                ctx.rotate(galaxyRotation);
+
+                // Core glow
+                const coreGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, baseRadius * 0.58);
+                coreGradient.addColorStop(0, 'rgba(225, 235, 255, 0.95)');
+                coreGradient.addColorStop(0.5, 'rgba(150, 190, 255, 0.45)');
+                coreGradient.addColorStop(1, 'rgba(40, 40, 80, 0)');
+                ctx.fillStyle = coreGradient;
+                ctx.beginPath();
+                ctx.arc(0, 0, baseRadius * 0.58, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Galaxy spiral arms
+                for (let arm = 0; arm < bigGalaxy.armCount; arm++) {
+                    const armOffset = arm * (Math.PI * 2 / bigGalaxy.armCount);
+                    const armHue = 220 + (arm * 12);
+                    ctx.strokeStyle = `rgba(${210 - arm * 6}, ${220 - arm * 4}, 255, 0.16)`;
+                    ctx.lineWidth = 2.4;
+                    ctx.beginPath();
+                    for (let t = 0; t <= 1; t += 0.02) {
+                        const radius = baseRadius * t;
+                        const angle = t * Math.PI * 3 + armOffset;
+                        const jitter = Math.sin(t * Math.PI * 8 + gameTime / 600 + arm) * 8;
+                        const x = Math.cos(angle) * (radius + jitter);
+                        const y = Math.sin(angle) * (radius + jitter) * 0.55;
+                        if (t === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    }
+                    ctx.stroke();
+                }
+
+                // Central pixelated swirl
+                const pixelCount = 120;
+                for (let i = 0; i < pixelCount; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const distanceFromCenter = Math.random() * baseRadius * 0.4;
+                    const size = Math.random() * 2 + 1;
+                    ctx.fillStyle = `rgba(255, 255, 255, ${0.2 + Math.random() * 0.45})`;
+                    ctx.fillRect(Math.cos(angle) * distanceFromCenter, Math.sin(angle) * distanceFromCenter, size, size);
+                }
+
+                ctx.restore();
+            }
+
+            // Draw stars with low parallax for depth
+            for (const star of galaxyStars) {
+                const px = ((star.worldX - cameraX) * star.parallax) + screenCenterX;
+                const py = ((star.worldY - cameraY) * star.parallax) + screenCenterY;
+                const twinklePhase = Math.sin((backgroundAnimationTime / 900) + star.twinkle) * 0.4 + 0.6;
+                const opacity = Math.max(0.18, Math.min(1, star.brightness * twinklePhase));
+                ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+                ctx.fillRect(px, py, star.radius, star.radius);
+            }
+
+            // Draw orbiting and scattered planets
+            for (const planet of galaxyPlanets) {
+                let px;
+                let py;
+                let baseRadius = planet.size;
+                let planetAngle = 0;
+
+                if (planet.type === 'orbit') {
+                    const orbitAngle = planet.angleOffset + backgroundAnimationTime * planet.orbitSpeed;
+                    const worldX = bigGalaxy.worldX + Math.cos(orbitAngle) * planet.orbitRadius;
+                    const worldY = bigGalaxy.worldY + Math.sin(orbitAngle) * planet.orbitRadius;
+                    px = ((worldX - cameraX) * planet.parallax) + screenCenterX;
+                    py = ((worldY - cameraY) * planet.parallax) + screenCenterY;
+                    planetAngle = orbitAngle * 0.9;
+                    baseRadius = planet.size * (0.85 + 0.12 * Math.sin(planetAngle));
+                } else {
+                    px = ((planet.worldX - cameraX) * planet.parallax) + screenCenterX;
+                    py = ((planet.worldY - cameraY) * planet.parallax) + screenCenterY;
+                    baseRadius = planet.size * (0.95 + 0.08 * Math.sin(backgroundAnimationTime * 0.0009));
+                }
+
+                // Subtle aura
+                ctx.fillStyle = `rgba(160, 190, 255, ${planet.alpha * 0.2})`;
+                ctx.beginPath();
+                ctx.arc(px, py, baseRadius * 1.35, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Core planet body
+                ctx.fillStyle = `hsla(${planet.hue}, 70%, 60%, 0.96)`;
+                ctx.beginPath();
+                ctx.arc(px, py, baseRadius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Outer shell and highlight
+                ctx.fillStyle = `hsla(${(planet.hue + 25) % 360}, 70%, 52%, 0.9)`;
+                ctx.beginPath();
+                ctx.arc(px, py, baseRadius * 0.9, 0, Math.PI * 2);
+                ctx.fill();
+
+                if (planet.hasRing) {
+                    ctx.strokeStyle = `hsla(${(planet.hue + 30) % 360}, 75%, 85%, 0.3)`;
+                    ctx.lineWidth = planet.ringThickness;
+                    ctx.beginPath();
+                    ctx.ellipse(px, py, baseRadius * 1.4, baseRadius * 0.4, planetAngle * 0.4, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+
+                // Pixelated surface details
+                const pixelDetail = 3;
+                for (let x = -baseRadius * 0.75; x <= baseRadius * 0.75; x += pixelDetail) {
+                    for (let y = -baseRadius * 0.75; y <= baseRadius * 0.75; y += pixelDetail) {
+                        if (distance(0, 0, x, y) < baseRadius * 0.82 && Math.random() < 0.12) {
+                            ctx.fillStyle = `hsla(${(planet.hue + 15) % 360}, 65%, 45%, ${0.2 + Math.random() * 0.2})`;
+                            ctx.fillRect(px + x, py + y, pixelDetail, pixelDetail);
+                        }
+                    }
+                }
+
+                // No moons, asteroids, or comets are drawn in this refined starfield.
+            }
+
+            // Add subtle layered haze for depth and variation
+            const hazeGradient = ctx.createRadialGradient(screenCenterX, screenCenterY, canvas.width * 0.2, screenCenterX, screenCenterY, canvas.width * 0.8);
+            hazeGradient.addColorStop(0, 'rgba(25, 20, 50, 0.0)');
+            hazeGradient.addColorStop(1, 'rgba(10, 6, 20, 0.25)');
+            ctx.fillStyle = hazeGradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.restore();
+        }
+
+        // Helper function to fire basic projectiles
 
         // Helper function to fire basic projectiles
         function fireBasicProjectiles(player, baseAngle, isDuplicateProjectile = false) {
@@ -89,6 +332,7 @@
                     damage: finalDamage,
                     // PLAYER 1: LIGHT BLUE, PLAYER 2: DEEP PINK
                     color: player.playerNumber === 1 ? '#ADD8E6' : '#FF1493', 
+                    trailColor: player.legendaryAbilitiesLevels.venom > 0 ? 'rgba(80, 255, 80, 1)' : (player.playerNumber === 1 ? 'rgba(173, 216, 230, 1)' : 'rgba(255, 20, 147, 1)'),
                     type: 'basic',
                     isBasicProjectile: true, // Added to identify basic projectiles
                     player: player,
@@ -148,7 +392,7 @@
                 let targetX = targetPosition ? targetPosition.x : player.x + Math.cos(angle) * (200);
                 let targetY = targetPosition ? targetPosition.y : player.y + Math.sin(angle) * (200);
 
-                // TORNADO GRENADE: When it reaches MAX LVL, the clone will be launched at the exact location of the original but in the opposite direction, and will explode mirrored.
+                // GRANADA VORTEX: When it reaches MAX LVL, the clone will be launched at the exact location of the original but in the opposite direction, and will explode mirrored.
                 if (originalProjectileInfo && originalProjectileInfo.level === 10) { // Only for the max level clone (now 10)
                     // Calculate mirrored target position relative to the center of the canvas
                     targetX = canvas.width - originalProjectileInfo.initialTargetX;
@@ -195,9 +439,9 @@
 
         // Helper to find the center of an enemy cluster WITHIN THE CANVAS
         function findDenseEnemyTargetInCanvas() {
-            // Filter enemies to only include those within the canvas bounds
+            // Filter enemies to only include those within or near the current viewport bounds
             const enemiesInCanvas = enemies.filter(enemy => 
-                !enemy.isDead && enemy.x > 0 && enemy.x < canvas.width && enemy.y > 0 && enemy.y < canvas.height
+                !enemy.isDead && enemy.x > window.viewLeft - 200 && enemy.x < window.viewRight + 200 && enemy.y > window.viewTop - 200 && enemy.y < window.viewBottom + 200
             );
 
             if (enemiesInCanvas.length === 0) return null;
@@ -242,8 +486,8 @@
             let closestEnemy = null;
             let minDist = Infinity;
             for (const enemy of enemies) {
-                // Ensure enemy is alive and within canvas bounds
-                if (!enemy.isDead && enemy.x > 0 && enemy.x < canvas.width && enemy.y > 0 && enemy.y < canvas.height) {
+                // Ensure enemy is alive and roughly within a reasonable search area around the viewport
+                if (!enemy.isDead && enemy.x > window.viewLeft - 200 && enemy.x < window.viewRight + 200 && enemy.y > window.viewTop - 200 && enemy.y < window.viewBottom + 200) {
                     const dist = distance(origin.x, origin.y, enemy.x, enemy.y);
                     if (dist < minDist) {
                         minDist = dist;
@@ -259,8 +503,8 @@
             let furthestEnemy = null;
             let maxDist = -1;
             for (const enemy of enemies) {
-                // Check if enemy is within canvas bounds
-                if (!enemy.isDead && enemy.x > 0 && enemy.x < canvas.width && enemy.y > 0 && enemy.y < canvas.height) {
+                // Consider enemies inside or near the viewport
+                if (!enemy.isDead && enemy.x > window.viewLeft - 200 && enemy.x < window.viewRight + 200 && enemy.y > window.viewTop - 200 && enemy.y < window.viewBottom + 200) {
                     const dist = distance(origin.x, origin.y, enemy.x, enemy.y);
                     if (dist > maxDist) {
                         maxDist = dist;
@@ -291,31 +535,58 @@
         function calculateSpecialAbilityDamage(player, abilityType) {
             let playerDamage = player.damage;
 
-            let damageMultiplier;
+            // Base fixed damage values for each special ability.
+            // The hierarchy from highest to lowest is: TIRO LETAL, EXPLOSÃO DE PLASMA,
+            // BUMERANGUE TÁTICO, EMPURRÃO, GRANADA VORTEX, ZAP.
+            const baseDamageByAbility = {
+                letal_shot: 72,
+                plasma_explosion: 56,
+                tactic_boomerang: 48,
+                push: 40,
+                tornado_grenade: 32,
+                zap: 22,
+                plasma_area: 32,
+                wind_trail: 24,
+                venom_trail: 18
+            };
+
+            const baseDamage = baseDamageByAbility[abilityType] ?? 20;
+            let level = 0;
+
             switch (abilityType) {
-                case 'tornado_grenade': // TORNADO GRENADE
-                case 'push': // PUSH
-                case 'plasma_area': // PLASMA AREA from PLASMA EXPLOSION
-                case 'venom_trail': // POISON (from LEGENDARY ABILITY - POISON)
-                case 'wind_trail': // WIND TRAIL from LETHAL SHOT
-                case 'zap': // ZAP
-                    damageMultiplier = 0.7; // Increased by 40% (0.5 * 1.4 = 0.7)
+                case 'tornado_grenade':
+                    level = player.specialAbilities.tornado_grenade?.level || 0;
                     break;
-                case 'tactic_boomerang': // TACTICAL BOOMERANG
-                    damageMultiplier = 1.125; // Increased by 50% (0.75 * 1.5 = 1.125)
+                case 'push':
+                    level = player.specialAbilities.push?.level || 0;
                     break;
-                case 'plasma_explosion': // PLASMA EXPLOSION (Projectile, not Area)
-                    damageMultiplier = 1.1; // Player's damage + 10% of Player's Damage
+                case 'zap':
+                    level = player.specialAbilities.zap?.level || 0;
                     break;
-                case 'letal_shot': // LETHAL SHOT
-                    damageMultiplier = 3.0; // Triple Player's Damage
+                case 'tactic_boomerang':
+                    level = player.specialAbilities.tactic_boomerang?.level || 0;
+                    break;
+                case 'plasma_explosion':
+                    level = player.specialAbilities.plasma_explosion?.level || 0;
+                    break;
+                case 'letal_shot':
+                    level = player.specialAbilities.letal_shot?.level || 0;
+                    break;
+                case 'plasma_area':
+                    level = player.specialAbilities.plasma_explosion?.level || 0;
+                    break;
+                case 'wind_trail':
+                    level = player.specialAbilities.letal_shot?.level || 0;
+                    break;
+                case 'venom_trail':
+                    level = player.legendaryAbilitiesLevels.venom > 0 ? 1 : 0;
                     break;
                 default:
-                    damageMultiplier = 1.0; // Fallback for basic or unlisted (player's base damage)
+                    level = 0;
                     break;
             }
-            // Add +2 damage to all special abilities
-            return Math.floor(playerDamage * damageMultiplier) + 2;
+
+            return Math.floor(baseDamage + (level * 10) + (playerDamage * 0.5));
         }
 
         const controls = {
@@ -323,33 +594,29 @@
                 up: false,
                 down: false,
                 left: false,
-                right: false,
-                shoot: false
+                right: false
             },
             player2: {
                 up: false,
                 down: false,
                 left: false,
-                right: false,
-                shoot: false
+                right: false
             }
         };
 
         // Event listeners for controls
         window.addEventListener('keydown', (e) => {
-            // Player 1 (WASD + Space)
+            // Player 1 (WASD)
             if (e.key === 'w' || e.key === 'W') controls.player1.up = true;
             if (e.key === 's' || e.key === 'S') controls.player1.down = true;
             if (e.key === 'a' || e.key === 'A') controls.player1.left = true;
             if (e.key === 'd' || e.key === 'D') controls.player1.right = true;
-            if (e.key === ' ') controls.player1.shoot = true;
 
-            // Player 2 (Arrows + Enter)
+            // Player 2 (Arrows)
             if (e.key === 'ArrowUp') controls.player2.up = true;
             if (e.key === 'ArrowDown') controls.player2.down = true;
             if (e.key === 'ArrowLeft') controls.player2.left = true;
             if (e.key === 'ArrowRight') controls.player2.right = true;
-            if (e.key === 'Enter') controls.player2.shoot = true;
 
             // Handle title screen dismissal
             if (document.getElementById('title-screen').style.display === 'flex') {
@@ -470,19 +737,17 @@
         });
 
         window.addEventListener('keyup', (e) => {
-            // Player 1 (WASD + Space)
+            // Player 1 (WASD)
             if (e.key === 'w' || e.key === 'W') controls.player1.up = false;
             if (e.key === 's' || e.key === 'S') controls.player1.down = false;
             if (e.key === 'a' || e.key === 'A') controls.player1.left = false;
             if (e.key === 'd' || e.key === 'D') controls.player1.right = false;
-            if (e.key === ' ') controls.player1.shoot = false;
 
-            // Player 2 (Arrows + Enter)
+            // Player 2 (Arrows)
             if (e.key === 'ArrowUp') controls.player2.up = false;
             if (e.key === 'ArrowDown') controls.player2.down = false;
             if (e.key === 'ArrowLeft') controls.player2.left = false;
             if (e.key === 'ArrowRight') controls.player2.right = false;
-            if (e.key === 'Enter') controls.player2.shoot = false;
         });
 
         // Function to update the visual selection in menus
@@ -972,6 +1237,103 @@
             }, 1000); // Update every 1 second
 
             lastTime = Date.now();
+            // Initialize world and camera for the new game
+            worldWidth = canvas.width * 3;
+            worldHeight = canvas.height * 3;
+            // Position players roughly in the center of the world
+            cameraX = (players[0].x + (players[1]?.x || players[0].x)) / 2;
+            cameraY = (players[0].y + (players[1]?.y || players[0].y)) / 2;
+            updateCamera();
+            window.worldWidth = worldWidth;
+            window.worldHeight = worldHeight;
+
+            console.log('startGame: players=', players.length, 'enemySpawnInterval=', enemySpawnInterval, 'world=', worldWidth, 'x', worldHeight);
+            if (enemies.length === 0 && waveLevel < 50) {
+                spawnEnemy();
+            }
+
+            // Initialize galaxy background stars and planets
+            backgroundAnimationTime = 0;
+            galaxyStars.length = 0;
+            galaxyPlanets.length = 0;
+            bigGalaxy = null;
+
+            bigGalaxy = {
+                worldX: worldWidth / 2,
+                worldY: worldHeight / 2,
+                radius: 230 + Math.random() * 60,
+                hue: 220,
+                parallax: 0.06,
+                armCount: 5,
+                rotationOffset: Math.random() * Math.PI * 2,
+            };
+
+            const starCols = 22;
+            const starRows = 16;
+            const starCellWidth = worldWidth / starCols;
+            const starCellHeight = worldHeight / starRows;
+            for (let row = 0; row < starRows; row++) {
+                for (let col = 0; col < starCols; col++) {
+                    if (galaxyStars.length >= galaxyStarCount) break;
+                    galaxyStars.push({
+                        worldX: Math.min(worldWidth - 1, col * starCellWidth + 8 + Math.random() * (starCellWidth - 16)),
+                        worldY: Math.min(worldHeight - 1, row * starCellHeight + 8 + Math.random() * (starCellHeight - 16)),
+                        radius: Math.random() * 1.6 + 0.8,
+                        twinkle: Math.random() * Math.PI * 2,
+                        brightness: 0.5 + Math.random() * 0.5,
+                        parallax: 0.06 + Math.random() * 0.14,
+                    });
+                }
+            }
+            while (galaxyStars.length < galaxyStarCount) {
+                galaxyStars.push({
+                    worldX: Math.random() * worldWidth,
+                    worldY: Math.random() * worldHeight,
+                    radius: Math.random() * 1.6 + 0.8,
+                    twinkle: Math.random() * Math.PI * 2,
+                    brightness: 0.5 + Math.random() * 0.5,
+                    parallax: 0.06 + Math.random() * 0.14,
+                });
+            }
+
+            const orbitPlanetCount = Math.floor(galaxyPlanetCount * 0.55);
+            const scatteredPlanetCount = galaxyPlanetCount - orbitPlanetCount;
+
+            for (let i = 0; i < orbitPlanetCount; i++) {
+                const orbitRadius = 240 + i * 36 + Math.random() * 42;
+                const hue = Math.floor(Math.random() * 360);
+                const hasRing = Math.random() < 0.4;
+                galaxyPlanets.push({
+                    type: 'orbit',
+                    orbitRadius,
+                    orbitSpeed: 0.00022 + Math.random() * 0.00012,
+                    angleOffset: Math.random() * Math.PI * 2,
+                    hue,
+                    size: 12 + Math.random() * 10,
+                    alpha: 0.16 + Math.random() * 0.26,
+                    parallax: 0.16 + Math.random() * 0.1,
+                    hasRing,
+                    ringThickness: 2 + Math.floor(Math.random() * 3),
+                });
+            }
+
+            for (let i = 0; i < scatteredPlanetCount; i++) {
+                const hue = Math.floor(Math.random() * 360);
+                galaxyPlanets.push({
+                    type: 'scattered',
+                    worldX: Math.random() * worldWidth,
+                    worldY: Math.random() * worldHeight,
+                    hue,
+                    size: 10 + Math.random() * 10,
+                    alpha: 0.12 + Math.random() * 0.18,
+                    parallax: 0.08 + Math.random() * 0.08,
+                    hasRing: Math.random() < 0.25,
+                    ringThickness: 1 + Math.floor(Math.random() * 3),
+                });
+            }
+
+            // No comets or asteroids are used in this refined galaxy background.
+
             console.log('Game started. gameRunning:', gameRunning, 'gamePaused:', gamePaused);
             requestAnimationFrame(gameLoop);
         }
@@ -1015,10 +1377,20 @@
             lastTime = now;
 
             if (!gamePaused) { // Only update if game is NOT paused
-                update(deltaTime);
+                backgroundAnimationTime += deltaTime;
+                try {
+                    update(deltaTime);
+                } catch (error) {
+                    console.error('Game update error:', error);
+                }
             }
 
-            draw();
+            try {
+                draw();
+            } catch (error) {
+                console.error('Game draw error:', error);
+            }
+
             requestAnimationFrame(gameLoop);
         }
 
@@ -1059,6 +1431,9 @@
                 player.update(deltaTime);
             }
 
+            // Update camera after player positions change
+            updateCamera();
+
             let nextProjectiles = [];
             for (let i = 0; i < projectiles.length; i++) {
                 const projectile = projectiles[i];
@@ -1075,12 +1450,13 @@
                     }
                 }
 
-                // Remove projectiles that go off-screen, EXCEPT tactic_boomerangs and tornado_grenade_launcher
+                // Remove projectiles that go far outside the current viewport, EXCEPT tactic_boomerangs and tornado_grenade_launcher
+                const MARGIN = 200; // allow some offscreen persistence
                 if (projectile.type !== 'tactic_boomerang' && projectile.type !== 'tornado_grenade_launcher') {
-                    if (projectile.x < -projectile.radius ||
-                        projectile.x > canvas.width + projectile.radius ||
-                        projectile.y < -projectile.radius ||
-                        projectile.y > canvas.height + projectile.radius) {
+                    if (projectile.x < window.viewLeft - MARGIN ||
+                        projectile.x > window.viewRight + MARGIN ||
+                        projectile.y < window.viewTop - MARGIN ||
+                        projectile.y > window.viewBottom + MARGIN) {
                         removedThisFrame = true;
                     }
                 }
@@ -1407,6 +1783,18 @@
             // Filter out dead enemies
             enemies = enemies.filter(enemy => !enemy.isDead);
 
+            // Safety caps to avoid runaway arrays and freezes
+            const MAX_PROJECTILES = 600;
+            const MAX_PARTICLES = 800;
+            const MAX_ENEMIES = 220;
+            const MAX_SPECIAL_EFFECTS = 120;
+            const MAX_EXPORBS = 80;
+
+            if (projectiles.length > MAX_PROJECTILES) projectiles.length = MAX_PROJECTILES;
+            if (particles.length > MAX_PARTICLES) particles.length = MAX_PARTICLES;
+            if (enemies.length > MAX_ENEMIES) enemies.length = MAX_ENEMIES;
+            if (specialEffects.length > MAX_SPECIAL_EFFECTS) specialEffects.length = MAX_SPECIAL_EFFECTS;
+            if (expOrbs.length > MAX_EXPORBS) expOrbs.length = MAX_EXPORBS;
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const enemy = enemies[i];
                 // Store original positions for collision detection after push
@@ -1481,9 +1869,9 @@
                     continue;
                 }
 
-                // Apply damage based on interval for continuous effects (tornado_grenade, plasma, venom_trail)
-                // And for Push at Max Level. For Push at lower levels, it's one-time damage.
-                if ((effect.type === 'tornado_grenade' || effect.type === 'plasma' || effect.type === 'venom_trail' || (effect.type === 'push' && effect.level === effect.player.specialAbilities.push.maxLevel)) && now - effect.lastDamageTime >= effect.damageInterval) {
+                // Apply damage based on interval for continuous effects (plasma, venom_trail)
+                // Push does one-time damage at lower levels and continuous damage at max level.
+                if ((effect.type === 'plasma' || effect.type === 'venom_trail' || (effect.type === 'push' && effect.level === effect.player.specialAbilities.push.maxLevel)) && now - effect.lastDamageTime >= effect.damageInterval) {
                     for (let j = enemies.length - 1; j >= 0; j--) {
                         const enemy = enemies[j];
                         if (enemy.isDead) continue;
@@ -1494,23 +1882,39 @@
 
                         if (distance < effect.radius + enemy.radius) {
                              if ((effect.type === 'plasma' || effect.type === 'venom_trail') && effect.hitEnemies.has(enemy.id)) {
-                                // plasma and venom_trail: only damage once per interval per enemy
                                 continue;
                             }
-                            const enemyDied = enemy.takeDamage(effect.damage); // Apply full damage, not per deltaTime
+                            const enemyDied = enemy.takeDamage(effect.damage);
                             if (enemyDied) {
                                 enemy.isDead = true;
                                 handleEnemyDefeat(enemy, effect.player);
                             }
                             if (effect.type === 'plasma' || effect.type === 'venom_trail') {
-                                effect.hitEnemies.add(enemy.id); // Mark as hit for this interval
+                                effect.hitEnemies.add(enemy.id);
                             }
                         }
                     }
-                    effect.lastDamageTime = now; // Reset last damage time for this effect
-                    // Clear hit enemies for next interval for plasma and venom_trail
+                    effect.lastDamageTime = now;
                     if (effect.type === 'plasma' || effect.type === 'venom_trail') {
                         effect.hitEnemies.clear(); 
+                    }
+                } else if (effect.type === 'tornado_grenade') {
+                    for (let j = enemies.length - 1; j >= 0; j--) {
+                        const enemy = enemies[j];
+                        if (enemy.isDead) continue;
+
+                        const dx = effect.x - enemy.x;
+                        const dy = effect.y - enemy.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+
+                        if (distance < effect.radius + enemy.radius && !effect.hitEnemies.has(enemy.id)) {
+                            const enemyDied = enemy.takeDamage(effect.damage);
+                            if (enemyDied) {
+                                enemy.isDead = true;
+                                handleEnemyDefeat(enemy, effect.player);
+                            }
+                            effect.hitEnemies.add(enemy.id);
+                        }
                     }
                 } else if (effect.type === 'push' && effect.level < effect.player.specialAbilities.push.maxLevel && !effect.hasDamaged) {
                     // One-time damage for Push at lower levels
@@ -1546,18 +1950,15 @@
                         if (distance < effect.radius + enemy.radius) {
                             const angle = Math.atan2(enemy.y - effect.y, enemy.x - effect.x);
                             let forceMagnitude;
-                            const gridSize = 30; // From your draw function
-                            const targetPushDistance = 2.5 * gridSize; // 2.5 squares
+                            const gridSize = 30;
+                            const targetPushDistance = 2.5 * gridSize;
 
-                            // Push: Increase the force by which it pushes Enemies by 30%.
-                            const baseForce = 15; // Current base push magnitude
-                            const increasedBaseForce = baseForce * 1.30; // Increase by 30%
+                            const baseForce = 15;
+                            const increasedBaseForce = baseForce * 1.30;
 
                             if (effect.level === 10) {
-                                forceMagnitude = targetPushDistance; // Push exactly 2.5 squares
+                                forceMagnitude = targetPushDistance;
                             } else {
-                                // Scale push force for lower levels
-                                // Max push at max level, minimum push at level 1 (reduced)
                                 const levelScale = (effect.level - 1) / (effect.player.specialAbilities.push.maxLevel - 1);
                                 forceMagnitude = increasedBaseForce + (targetPushDistance - increasedBaseForce) * levelScale;
                             }
@@ -1609,7 +2010,7 @@
                     }
                 }
 
-                // Visual particles for TORNADO GRENADE (Black, White, and Gray)
+                // Visual particles for GRANADA VORTEX (Black, White, and Gray)
                 if (effect.type === 'tornado_grenade' && Math.random() < 0.52) { // Reduced by 35% (was 0.8)
                     const particleAngle = Math.random() * Math.PI * 2;
                     const particleDistance = Math.random() * effect.radius;
@@ -1804,27 +2205,43 @@
         }
 
         function spawnEnemy(isBoss = false, forcedTheme = null) {
-            let x, y;
-            const borderOffset = 50;
-            const side = Math.floor(Math.random() * 4);
+            // Spawn enemies around players (or single player) but NEVER inside the current visible viewport
+            let anchorX, anchorY;
+            if (players.length === 0) {
+                anchorX = cameraX;
+                anchorY = cameraY;
+            } else if (players.length === 1) {
+                anchorX = players[0].x;
+                anchorY = players[0].y;
+            } else {
+                anchorX = (players[0].x + players[1].x) / 2;
+                anchorY = (players[0].y + players[1].y) / 2;
+            }
 
-            switch (side) {
-                case 0: // Top
-                    x = Math.random() * canvas.width;
-                    y = -borderOffset;
-                    break;
-                case 1: // Right
-                    x = canvas.width + borderOffset;
-                    y = Math.random() * canvas.height;
-                    break;
-                case 2: // Bottom
-                    x = Math.random() * canvas.width;
-                    y = canvas.height + borderOffset;
-                    break;
-                case 3: // Left
-                    x = -borderOffset;
-                    y = Math.random() * canvas.height;
-                    break;
+            const maxAttempts = 12;
+            let x = 0, y = 0;
+            // Allow min distance to slightly shrink at higher waves so spawns feel more immediate
+            const minDistFactor = Math.max(0.38, 0.55 - Math.min(0.12, waveLevel * 0.002));
+            const minDist = Math.max(canvas.width, canvas.height) * minDistFactor + 80; // ensure offscreen but not far
+            const maxDist = minDist + 300; // don't spawn too far
+
+            let chosenAngle = 0;
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                const angle = Math.random() * Math.PI * 2;
+                chosenAngle = angle;
+                const radius = minDist + Math.random() * (maxDist - minDist);
+                x = anchorX + Math.cos(angle) * radius;
+                y = anchorY + Math.sin(angle) * radius;
+
+                // Ensure spawn is inside world bounds
+                x = Math.max(0 + 10, Math.min(window.worldWidth - 10, x));
+                y = Math.max(0 + 10, Math.min(window.worldHeight - 10, y));
+
+                // Reject if the spawn sits inside the current view
+                if (x < window.viewLeft || x > window.viewRight || y < window.viewTop || y > window.viewBottom) {
+                    break; // acceptable spawn
+                }
+                // otherwise retry
             }
 
             let subtype = 'normal';
@@ -1833,7 +2250,20 @@
                 subtype = subtypes[Math.floor(Math.random() * subtypes.length)];
             }
 
-            enemies.push(new Enemy(x, y, isBoss, subtype, forcedTheme)); // Pass forcedTheme to Enemy constructor
+            // Compute a tangential velocity so the enemy orbits briefly around the anchor before homing
+            let initialVel = { vx: 0, vy: 0 };
+            let spawnOrbitDuration = 0;
+            if (!isBoss) {
+                // Tangential (perpendicular) direction to vector from anchor to spawn
+                const orbitSpeedBase = 1.0 + Math.random() * 1.2; // base tangential speed
+                const waveSpeedFactor = 1 + Math.min(0.35, waveLevel * 0.01);
+                const orbitSpeed = orbitSpeedBase * waveSpeedFactor * (GAME_SCALE_FACTOR * 0.6);
+                initialVel.vx = -Math.sin(chosenAngle) * orbitSpeed;
+                initialVel.vy = Math.cos(chosenAngle) * orbitSpeed;
+                spawnOrbitDuration = 700 + Math.floor(Math.random() * 900); // 700-1600 ms
+            }
+
+            enemies.push(new Enemy(x, y, isBoss, subtype, forcedTheme, initialVel, spawnOrbitDuration)); // Pass initial velocity and duration
             console.log(`Spawned enemy: ${isBoss ? 'Boss' : 'Normal'} (Subtype: ${subtype}, Theme: ${forcedTheme || 'N/A'}) at (${x.toFixed(0)}, ${y.toFixed(0)})`);
         }
 
@@ -1927,72 +2357,60 @@
 
         function draw() {
             // console.log('Draw called.'); // Uncomment this if canvas drawing issues persist.
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset any previous transform before drawing
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.globalAlpha = 1;
+            ctx.imageSmoothingEnabled = false;
+            drawGalaxyBackground();
 
-            // Redrawing the grid for the pixelated aesthetic
-            ctx.strokeStyle = 'rgba(50, 50, 50, 0.3)'; // Softer grid
-            ctx.lineWidth = 1;
+            // Prepare world-to-screen transform based on camera
+            ctx.save();
+            ctx.translate(Math.floor(canvas.width / 2 - cameraX), Math.floor(canvas.height / 2 - cameraY));
 
-            const gridSize = 30; // Smaller grid size for more "pixel" visual
-            for (let x = 0; x < canvas.width; x += gridSize) {
-                ctx.beginPath();
-                ctx.moveTo(x, 0);
-                ctx.lineTo(x, canvas.height);
-                ctx.stroke();
-            }
-
-            for (let y = 0; y < canvas.height; y += gridSize) {
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(canvas.width, y);
-                ctx.stroke();
-            }
+            // Removed meteor boundary chain to keep the world focused on galaxy and planets.
 
             for (const effect of specialEffects) {
                 if (effect.type === 'push') {
+                    ctx.save();
+                    ctx.translate(effect.x, effect.y);
                     const progress = effect.timer / effect.duration;
-                    const alpha = 0.8 * (1 - progress); // Start with higher alpha for more visibility
-                    const numWaves = 4; // Number of concentric waves
-                    const waveSpacing = effect.radius / numWaves; // Spacing between waves
-                    const lineWidth = 3 * (1 - progress) + 1; // Line width that fades
+                    const alpha = 0.88 * (1 - progress);
+                    const numWaves = 5;
+                    const waveSpacing = effect.radius / numWaves;
+                    const lineWidth = 4 * (1 - progress) + 1.5;
 
-                    // Add a purple glow to the push effect
-                    ctx.shadowBlur = 15;
-                    ctx.shadowColor = 'rgba(128, 0, 128, 0.8)'; // Darker Purple for main glow
+                    ctx.shadowBlur = 24;
+                    ctx.shadowColor = 'rgba(180, 100, 255, 0.9)';
 
-                    // Draw multiple expanding rings
                     for (let i = 0; i < numWaves; i++) {
-                        const currentWaveRadius = (i * waveSpacing) + (effect.radius * progress);
-                        const waveAlpha = alpha * (1 - (i / numWaves)); // Waves further out are more transparent
-                        ctx.strokeStyle = `rgba(128, 0, 128, ${waveAlpha})`; // Purple for waves
+                        const currentWaveRadius = (i * waveSpacing) + (effect.radius * progress * 0.9);
+                        const waveAlpha = alpha * (1 - (i / numWaves)) * 0.95;
+                        ctx.strokeStyle = `rgba(170, 80, 255, ${waveAlpha})`;
                         ctx.lineWidth = Math.max(1, lineWidth * (1 - (i / numWaves)));
                         ctx.beginPath();
-                        ctx.arc(0, 0, currentWaveRadius, 0, Math.PI * 2); // Corrected to draw relative to translated origin
+                        ctx.arc(0, 0, currentWaveRadius, 0, Math.PI * 2);
                         ctx.stroke();
                     }
 
-                    // Central pixelated core (more subtle, but still present)
-                    const innerCoreRadius = effect.radius * 0.2 * (1 - progress); // Shrinks as it expands
+                    const innerCoreRadius = effect.radius * 0.18 * (1 - progress);
                     const pixelSize = 4;
-                    ctx.fillStyle = `rgba(140, 0, 140, ${alpha * 0.4})`; // Slightly lighter purple
+                    ctx.fillStyle = `rgba(210, 150, 255, ${alpha * 0.45})`;
                     for (let x = -innerCoreRadius; x <= innerCoreRadius; x += pixelSize) {
                         for (let y = -innerCoreRadius; y <= innerCoreRadius; y += pixelSize) {
                             if (distance(0, 0, x, y) < innerCoreRadius) {
-                                ctx.fillRect(x, y, pixelSize, pixelSize); // Corrected to draw relative to translated origin
+                                ctx.fillRect(x, y, pixelSize, pixelSize);
                             }
                         }
                     }
 
-                    // Add a bright light purple glow
-                    const glowRadius = effect.radius * (0.5 + progress * 0.5); // Glow expands with effect
-                    const glowAlpha = alpha * 0.6; // Stronger initial alpha for glow
-                    ctx.fillStyle = `rgba(200, 160, 255, ${glowAlpha})`; // Light purple
+                    const glowRadius = effect.radius * (0.6 + progress * 0.6);
+                    const glowAlpha = alpha * 0.75;
+                    ctx.fillStyle = `rgba(220, 180, 255, ${glowAlpha})`;
                     ctx.beginPath();
-                    ctx.arc(0, 0, glowRadius, 0, Math.PI * 2); // Corrected to draw relative to translated origin
+                    ctx.arc(0, 0, glowRadius, 0, Math.PI * 2);
                     ctx.fill();
 
-                    ctx.shadowBlur = 0; // Reset shadow
-                    ctx.restore(); // Restore context after drawing push effect
+                    ctx.restore();
                 } else if (effect.type === 'plasma_explosion') {
                     const progress = effect.timer / effect.duration;
                     const alpha = 0.9 * (1 - progress); // Increased alpha for more solid fire
@@ -2000,48 +2418,53 @@
 
                     ctx.save();
                     ctx.translate(effect.x, effect.y);
+                    ctx.rotate(backgroundAnimationTime / 900 + progress * 2.2);
 
                     // Main fiery core - most intense, yellow-white
-                    ctx.fillStyle = `rgba(255, 240, 0, ${alpha * 0.9})`; // Brighter yellow-white center
+                    ctx.fillStyle = `rgba(255, 240, 0, ${alpha * 0.95})`; // Brighter yellow-white center
                     ctx.beginPath();
-                    ctx.arc(0, 0, currentRadius * 0.3, 0, Math.PI * 2);
+                    ctx.arc(0, 0, currentRadius * 0.28, 0, Math.PI * 2);
                     ctx.fill();
 
                     // Middle fiery layer - bright orange
-                    ctx.fillStyle = `rgba(255, 165, 0, ${alpha * 0.7})`; // Bright Orange
+                    ctx.fillStyle = `rgba(255, 165, 0, ${alpha * 0.75})`; // Bright Orange
                     ctx.beginPath();
-                    ctx.arc(0, 0, currentRadius * 0.6, 0, Math.PI * 2);
+                    ctx.arc(0, 0, currentRadius * 0.58, 0, Math.PI * 2);
                     ctx.fill();
 
                     // Outer fiery layer - vibrant red
-                    ctx.fillStyle = `rgba(255, 69, 0, ${alpha * 0.5})`; // Vibrant Red (Orange-Red)
+                    ctx.fillStyle = `rgba(255, 69, 0, ${alpha * 0.55})`; // Vibrant Red (Orange-Red)
                     ctx.beginPath();
                     ctx.arc(0, 0, currentRadius, 0, Math.PI * 2);
                     ctx.fill();
 
-                    // Randomized, pulsating "fire" shapes/particles for animation
-                    const particleCount = 30; // More particles for a denser fire effect
+                    // Pixelated rotating fire bits
+                    const particleCount = 32; // More particles for a denser fire effect
                     const pixelSize = 3; // For pixelated fire
                     for (let i = 0; i < particleCount; i++) {
-                        const angle = Math.random() * Math.PI * 2;
-                        const pDist = Math.random() * currentRadius * 1.2; // Can go slightly beyond the main sphere
-                        const particleAlpha = Math.random() * alpha * 0.8;
-
-                        // Randomly choose colors from yellow, orange, red spectrum
+                        const angle = i * (Math.PI * 2 / particleCount) + backgroundAnimationTime / 300;
+                        const pDist = currentRadius * 0.5 + Math.sin(backgroundAnimationTime / 600 + i) * 4;
+                        const particleAlpha = (0.3 + Math.random() * 0.4) * alpha;
                         let fireParticleColor;
                         const randColor = Math.random();
                         if (randColor < 0.33) {
-                            fireParticleColor = `rgba(255, 255, 0, ${particleAlpha})`; // Yellow
+                            fireParticleColor = `rgba(255, 255, 180, ${particleAlpha})`; // Yellow
                         } else if (randColor < 0.66) {
-                            fireParticleColor = `rgba(255, 140, 0, ${particleAlpha})`; // Dark Orange
+                            fireParticleColor = `rgba(255, 150, 40, ${particleAlpha})`; // Orange
                         } else {
-                            fireParticleColor = `rgba(255, 0, 0, ${particleAlpha})`; // Red
+                            fireParticleColor = `rgba(255, 80, 0, ${particleAlpha})`; // Red
                         }
-
                         ctx.fillStyle = fireParticleColor;
-                        // Draw small, irregular rectangles for a pixelated fire look
-                        ctx.fillRect(Math.cos(angle) * pDist - pixelSize / 2, Math.sin(angle) * pDist - pixelSize / 2, pixelSize + Math.random() * 3, pixelSize + Math.random() * 3);
+                        ctx.fillRect(Math.cos(angle) * pDist - pixelSize / 2, Math.sin(angle) * pDist - pixelSize / 2, pixelSize, pixelSize);
                     }
+
+                    // Add a twinkling ring of stars around
+                    ctx.strokeStyle = `rgba(255, 210, 120, ${alpha * 0.45})`;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, currentRadius * 1.2, 0, Math.PI * 2);
+                    ctx.stroke();
+
                     ctx.shadowBlur = 0; // Reset shadow
                     ctx.restore(); // Restore context after drawing plasma_explosion
                 } else if (effect.type === 'bossDeathDamage') {
@@ -2077,11 +2500,11 @@
                     const currentRadius = effect.radius;
                     const pixelDensity = 5; // Smaller value = more pixels
 
-                    // Outer swirling lines - more pronounced
-                    ctx.strokeStyle = `rgba(200, 200, 255, ${alpha * 0.8})`; // Lighter blue/white for lines
+                    // Outer swirling lines - white/gray vortex style
+                    ctx.strokeStyle = `rgba(230, 230, 230, ${alpha * 0.9})`; // Brighter gray-white for lines
                     ctx.lineWidth = 3; // Thicker lines
                     for (let i = 0; i < 6; i++) { // More lines
-                        // Tornado Grenade: The TORNADO animation should be faster to show the tornado's strength,
+                        // Vortex Grenade: The VORTEX animation should be faster to show the vortex's strength,
                         // at each Level this rotation should be even faster!
                         const rotationSpeed = 0.5 + (effect.level * 0.2); // Base 0.5, Increased to 0.2 per level
                         const startAngle = (gameTime / (400 / rotationSpeed)) + i * (Math.PI * 2 / 6); // Faster rotation based on level
@@ -2092,12 +2515,12 @@
                     }
 
                     // Central pixelated core - denser, more varied
-                    ctx.fillStyle = `rgba(150, 150, 200, ${alpha * 0.7})`; // Bluish-gray for core
+                    ctx.fillStyle = `rgba(210, 210, 210, ${alpha * 0.9})`; // Soft gray-white for core
                     const innerPulseRadius = currentRadius * 0.4;
                     for (let x = -innerPulseRadius; x <= innerPulseRadius; x += pixelDensity) {
                         for (let y = -innerPulseRadius; y <= innerPulseRadius; y += pixelDensity) {
                             if (distance(0, 0, x, y) < innerPulseRadius) {
-                                ctx.fillRect(x + effect.x, y + effect.y, pixelDensity, pixelDensity); // Fix: use effect.x/y for position
+                                ctx.fillRect(x, y, pixelDensity, pixelDensity);
                             }
                         }
                     }
@@ -2219,25 +2642,17 @@
                         ctx.moveTo(point1.x, point1.y);
                         ctx.lineTo(point2.x, point2.y);
                         
-                        // Specific trail color for basic projectiles (wind trail simulation)
+                        // Use a dedicated trail color for basic projectiles so the hue remains consistent
                         if (projectile.type === 'basic') {
-                            // Use a lighter version of the projectile color for the trail
-                            const baseColor = projectile.color.match(/\d+/g);
-                            // Blend towards white for a "wind" effect, but keep original hue
-                            const r = parseInt(baseColor[0]);
-                            const g = parseInt(baseColor[1]);
-                            const b = parseInt(baseColor[2]);
-                            const lighterColor = `rgba(${Math.min(255, r + 50)}, ${Math.min(255, g + 50)}, ${Math.min(255, b + 50)}, ${trailAlpha * 0.6})`; // Reduced alpha for subtlety
-                            ctx.strokeStyle = lighterColor;
-                            ctx.lineWidth = (projectile.radius * 0.4) * trailAlpha; // Slightly thinner trail
+                            const trailColor = projectile.trailColor || projectile.color;
+                            ctx.strokeStyle = trailColor.replace(')', `, ${trailAlpha * 0.9})`);
+                            ctx.lineWidth = (projectile.radius * 0.45) * trailAlpha;
                         } else {
                             ctx.strokeStyle = projectile.color.replace(')', `, ${trailAlpha * 0.8})`);
                             ctx.lineWidth = (projectile.radius * 0.5) * trailAlpha;
                         }
                         ctx.stroke();
 
-                        // Black outline for the trail (subtler for basic projectiles)
-                        // No outline for basic projectiles trail either
                         if (projectile.type !== 'basic') {
                             ctx.beginPath(); // New path for outline
                             ctx.moveTo(point1.x, point1.y);
@@ -2291,36 +2706,31 @@
 
                     ctx.shadowBlur = 0; // Reset shadow
                 } else if (projectile.type === 'tactic_boomerang') {
-                    const visualSize = projectile.radius * 2.5; // Overall scale
-                    const thickness = projectile.radius * 0.8; // How thick the 'C' is
+                    const visualSize = projectile.radius * 2.4;
+                    const thickness = projectile.radius * 0.9;
 
-                    ctx.fillStyle = projectile.color; // Dark gray
-                    ctx.strokeStyle = 'black'; // Black outline
+                    ctx.fillStyle = projectile.color; // Golden boomerang
+                    ctx.strokeStyle = '#333333'; // Dark outline
                     ctx.lineWidth = 2;
-                    ctx.shadowBlur = 8;
-                    ctx.shadowColor = projectile.color;
+                    ctx.shadowBlur = 12;
+                    ctx.shadowColor = 'rgba(255, 215, 80, 0.9)';
 
-                    // Draw the 'C' shape using arcs and lines
+                    // Draw the distinctive boomerang loop
                     ctx.beginPath();
-                    // Outer arc (top-right to bottom-right)
-                    ctx.arc(0, 0, visualSize, -Math.PI / 2, Math.PI / 2);
-                    // Line connecting outer arc to inner arc (bottom)
-                    ctx.lineTo(visualSize * 0.3, thickness);
-                    // Inner arc (bottom-right to top-right)
-                    ctx.arc(0, 0, visualSize * 0.6, Math.PI / 2, -Math.PI / 2, true);
-                    // Line connecting inner arc to outer arc (top)
-                    ctx.lineTo(visualSize * 0.3, -thickness);
+                    ctx.arc(0, 0, visualSize, -Math.PI * 0.45, Math.PI * 0.45);
+                    ctx.lineTo(visualSize * 0.28, thickness);
+                    ctx.arc(0, 0, visualSize * 0.62, Math.PI * 0.45, -Math.PI * 0.45, true);
                     ctx.closePath();
                     ctx.fill();
-                    ctx.stroke(); // Outline for boomerang
+                    ctx.stroke();
 
-                    // Add white pixelated details for a rougher, more detailed look
+                    // Add pixel detail to emphasize the drone effect
                     const detailPixelSize = 2;
-                    for (let i = 0; i < 40; i++) { // Increased number of pixels for density
-                        const xOffset = (Math.random() - 0.5) * visualSize * 2;
-                        const yOffset = (Math.random() - 0.5) * visualSize * 2;
-                        if (ctx.isPointInPath(xOffset, yOffset)) { // Only draw pixels inside the shape
-                            ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.3 + 0.2})`; // Subtle white pixels
+                    for (let i = 0; i < 32; i++) {
+                        const xOffset = (Math.random() - 0.5) * visualSize * 1.8;
+                        const yOffset = (Math.random() - 0.5) * visualSize * 1.8;
+                        if (ctx.isPointInPath(xOffset, yOffset)) {
+                            ctx.fillStyle = `rgba(255, 248, 180, ${Math.random() * 0.35 + 0.2})`;
                             ctx.fillRect(xOffset, yOffset, detailPixelSize, detailPixelSize);
                         }
                     }
@@ -2403,70 +2813,84 @@
                     ctx.shadowBlur = 0;
 
                 } else if (projectile.type === 'zap') {
-                    // Refactored SHOCKING (ZAP) appearance completely, keeping original color (Light Blue)
                     const visualSize = projectile.radius * 2.2;
-                    ctx.fillStyle = projectile.color; // Light Blue
-                    ctx.strokeStyle = 'black'; // Black outline
+                    ctx.fillStyle = projectile.color; // Neon cyan
+                    ctx.strokeStyle = '#004466'; // Dark blue outline
                     ctx.lineWidth = 2;
-                    ctx.shadowBlur = 15;
-                    ctx.shadowColor = '#0000FF'; // Stronger blue for glow
-                    
-                    // Draw a more defined, pixelated lightning bolt shape
-                    const boltWidth = visualSize * 0.3; // Thickness of the bolt
-                    const boltHeight = visualSize * 1.5; // Length of the main bolt
+                    ctx.shadowBlur = 18;
+                    ctx.shadowColor = '#00FFFF';
+
+                    const boltWidth = visualSize * 0.25;
+                    const boltHeight = visualSize * 1.7;
 
                     ctx.beginPath();
-                    ctx.moveTo(0, 0); // Start at center
-                    // Main zig-zag line for lightning bolt
-                    ctx.lineTo(boltWidth * 0.5, -boltHeight * 0.2);
-                    ctx.lineTo(-boltWidth * 0.3, -boltHeight * 0.5);
-                    ctx.lineTo(boltWidth * 0.8, -boltHeight * 0.6);
-                    ctx.lineTo(0, -boltHeight); // End point
-
-                    // Connect back to create thickness, forming the other side of the bolt
-                    ctx.lineTo(-boltWidth * 0.8, -boltHeight * 0.6);
-                    ctx.lineTo(boltWidth * 0.3, -boltHeight * 0.5);
-                    ctx.lineTo(-boltWidth * 0.5, -boltHeight * 0.2);
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(boltWidth * 0.3, -boltHeight * 0.18);
+                    ctx.lineTo(-boltWidth * 0.23, -boltHeight * 0.45);
+                    ctx.lineTo(boltWidth * 0.75, -boltHeight * 0.55);
+                    ctx.lineTo(boltWidth * 0.2, -boltHeight * 0.85);
+                    ctx.lineTo(-boltWidth * 0.65, -boltHeight * 0.6);
+                    ctx.lineTo(-boltWidth * 0.1, -boltHeight * 0.4);
                     ctx.closePath();
                     ctx.fill();
-                    ctx.stroke(); // Outline
-                    
-                    // Small pixelated sparks around the bolt
-                    const sparkCount = 10;
-                    const sparkSize = 1.5;
+                    ctx.stroke();
+
+                    // White core line for additional contrast
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(0, -visualSize * 0.05);
+                    ctx.lineTo(boltWidth * 0.28, -boltHeight * 0.2);
+                    ctx.lineTo(-boltWidth * 0.15, -boltHeight * 0.4);
+                    ctx.lineTo(boltWidth * 0.55, -boltHeight * 0.5);
+                    ctx.stroke();
+
+                    const sparkCount = 12;
+                    const sparkSize = 1.8;
                     for (let i = 0; i < sparkCount; i++) {
                         const pAngle = Math.random() * Math.PI * 2;
-                        const pDist = Math.random() * visualSize * 0.8;
-                        ctx.fillStyle = `rgba(255, 255, 255, ${0.5 + Math.random() * 0.5})`; // White sparks
+                        const pDist = Math.random() * visualSize * 0.9;
+                        ctx.fillStyle = `rgba(255, 255, 255, ${0.45 + Math.random() * 0.35})`;
                         ctx.fillRect(Math.cos(pAngle) * pDist, Math.sin(pAngle) * pDist, sparkSize, sparkSize);
                     }
                     ctx.shadowBlur = 0;
 
                 } else if (projectile.type === 'tornado_grenade_launcher') {
-                     ctx.fillStyle = projectile.color; // White
-                     ctx.strokeStyle = 'black'; // Black outline
+                     ctx.fillStyle = projectile.color; // Cyan grenade
+                     ctx.strokeStyle = '#004D66'; // Dark teal outline
                      ctx.lineWidth = 2;
                      const grenadeSize = projectile.radius * 2;
+                     ctx.shadowBlur = 18;
+                     ctx.shadowColor = projectile.color;
 
-                     // Draw a pixelated grenade body (rough circle/oval)
+                     // Draw a swirling orb body with pixel texture
                      const pixelSize = 2;
                      for (let x = -grenadeSize / 2; x <= grenadeSize / 2; x += pixelSize) {
                          for (let y = -grenadeSize / 2; y <= grenadeSize / 2; y += pixelSize) {
-                             if (distance(0, 0, x, y) < grenadeSize / 2) {
-                                 ctx.fillRect(x, y, pixelSize, pixelSize);
+                             if (distance(0, 0, x, y) < grenadeSize * 0.45) {
+                                 if (Math.random() < 0.65) {
+                                     ctx.fillRect(x, y, pixelSize, pixelSize);
+                                 }
                              }
                          }
                      }
-                     // Outline for grenade body
+
+                     // Outline and ring
                      ctx.beginPath();
                      ctx.arc(0, 0, grenadeSize / 2, 0, Math.PI * 2);
                      ctx.stroke();
+                     ctx.beginPath();
+                     ctx.ellipse(0, 0, grenadeSize * 0.55, grenadeSize * 0.35, Math.PI / 6, 0, Math.PI * 2);
+                     ctx.stroke();
 
-                     // Draw the pin/handle (still pixelated)
-                     ctx.fillRect(-2, -grenadeSize / 2 - 4, 4, 4); // Rectangle for pin
-                     ctx.fillRect(-4, -grenadeSize / 2 - 6, 8, 2); // Top part of handle
-                     ctx.strokeRect(-2, -grenadeSize / 2 - 4, 4, 4); // Outline for pin
-                     ctx.strokeRect(-4, -grenadeSize / 2 - 6, 8, 2); // Outline for top handle
+                     // Draw the pin/handle
+                     ctx.fillStyle = '#FFFFFF';
+                     ctx.fillRect(-2, -grenadeSize / 2 - 4, 4, 4);
+                     ctx.fillRect(-4, -grenadeSize / 2 - 6, 8, 2);
+                     ctx.strokeStyle = '#004D66';
+                     ctx.strokeRect(-2, -grenadeSize / 2 - 4, 4, 4);
+                     ctx.strokeRect(-4, -grenadeSize / 2 - 6, 8, 2);
+                     ctx.shadowBlur = 0;
 
                 } else {
                     // Default behavior for other projectiles (if any, still pixelated)
@@ -2491,6 +2915,9 @@
             for (const player of players) {
                 player.draw();
             }
+
+            // restore to screen space for HUD
+            ctx.restore();
 
             // Only draw wave progress if not on the final boss wave
             if (waveLevel < 50) {
@@ -2793,7 +3220,7 @@
                     break;
                 case 'tornado_grenade':
                     baseDescription = `<br> Cria uma área que causa ${currentDamage} de Dano Contínuo em Área e PUXA Inimigos por 3 segundos. Cada Nível aumenta o Tamanho em 20% e a Duração em 0.5 segundos.<br>`;
-                    maxPowerDescription = `Dispara uma Granada Tornado adicional na direção oposta.<br>`;
+                    maxPowerDescription = `Dispara uma Granada Vortex adicional na direção oposta.<br>`;
                     break;
                 default:
                     baseDescription = `<br> ${ability.description} que causa ${currentDamage} de Dano. Descrição do que aumenta por Nível.<br>`;
@@ -2832,10 +3259,10 @@
 
             if (player.playerNumber === 1) {
                 borderColor = '#00FFFF'; // Blue for player 1
-                textColor = '#00FFFF';
+                textColor = '#FFFFFF'; // Force white text for clarity
             } else { // Player 2
                 borderColor = '#800080'; // Purple for player 2
-                textColor = '#800080';
+                textColor = '#FFFFFF'; // Force white text for clarity
             }
 
             // Set menu border and shadow
@@ -2941,14 +3368,43 @@
                         displayLevel = ' (Nvl.Max)';
                     }
                 }
-                
+                // Ensure the background color of the option contrasts with text
+                const abilityColor = upgrade.color || getAbilityColor(upgrade.id) || '#404040';
+                // Convert hex like #RRGGBB to RGB components
+                function hexToRgb(hex) {
+                    const m = hex.replace('#','');
+                    const r = parseInt(m.substring(0,2),16);
+                    const g = parseInt(m.substring(2,4),16);
+                    const b = parseInt(m.substring(4,6),16);
+                    return {r,g,b};
+                }
+                function luminance(r,g,b){ return 0.2126*r + 0.7152*g + 0.0722*b; }
+                let bgColor = 'rgba(20,30,40,0.8)';
+                try {
+                    const rgb = hexToRgb(abilityColor);
+                    // make a darker translucent background based on ability color
+                    bgColor = `rgba(${Math.floor(rgb.r*0.12)}, ${Math.floor(rgb.g*0.12)}, ${Math.floor(rgb.b*0.12)}, 0.9)`;
+                    // Force white text for all upgrade menu entries for readability
+                    optionDiv.style.color = '#FFFFFF';
+                } catch (e) {
+                    optionDiv.style.color = '#90EE90';
+                }
+
+                optionDiv.style.backgroundColor = bgColor;
+
                 optionDiv.innerHTML = `
                     ${iconHtml}${upgrade.name}${displayLevel}
-                    <div style="font-size: 12px; margin-top: 5px;">${upgrade.description}</div>
+                    <div style="font-size: 12px; margin-top: 5px; color: inherit;">${upgrade.description}</div>
                 `;
                 optionsContainer.appendChild(optionDiv);
             });
             menu.style.display = 'flex'; // Changed to flex for centering
+            // Force fixed positioning and high z-index so the menu always appears centered
+            menu.style.position = 'fixed';
+            menu.style.top = '50%';
+            menu.style.left = '50%';
+            menu.style.transform = 'translate(-50%, -50%)';
+            menu.style.zIndex = 9999;
             setupMenuNavigation(menu); // Setup navigation for upgrade menu
         }
 
@@ -2962,12 +3418,12 @@
 
         function getAbilityColor(abilityName) {
             switch(abilityName) {
-                case 'push': return '#800080'; // Purple for Push
+                case 'push': return '#C71585'; // Purple-red for EMPURRÃO
                 case 'plasma_explosion': return '#ff9900';
-                case 'letal_shot': return '#ff00ff'; // Pink for letal_shot
-                case 'zap': return '#87CEEB'; // Light Blue for zap
-                case 'tactic_boomerang': return '#36454F'; // Dark Gray for tactic_boomerang
-                case 'tornado_grenade': return '#ffffff'; // White for tornado_grenade
+                case 'letal_shot': return '#ff00ff'; // Pink for TIRO LETAL
+                case 'zap': return '#87CEEB'; // Light blue/cyan for ZAP
+                case 'tactic_boomerang': return '#36454F'; // Dark gray for BUMERANGUE TÁTICO
+                case 'tornado_grenade': return '#EDEDED'; // White/gray for GRANADA VORTEX
                 case 'venom': return '#FFD700'; // Gold for legendary
                 case 'ricochet_bullets': return '#FFD700'; // Gold for legendary
                 case 'speedy_trigger': return '#FFD700'; // Gold for legendary
@@ -3117,8 +3573,8 @@
             {
                 id: 'tornado_grenade',
                 name: 'tornado_grenade', // Internal name
-                displayName: 'GRANADA TORNADO',
-                description: 'Arremessa uma granada que cria um tornado ao explodir, puxando e danificando Inimigos.',
+                displayName: 'GRANADA VORTEX',
+                description: 'Arremessa uma granada que cria um vórtice de energia pixel art, puxando e danificando Inimigos.',
                 // ...
             },
             {

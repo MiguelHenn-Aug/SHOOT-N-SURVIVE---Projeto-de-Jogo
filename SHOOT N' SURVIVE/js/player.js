@@ -15,11 +15,29 @@ class Player {
                 this.expNeeded = 10;
                 this.controls = controls;
                 this.lastShot = 0;
-                this.shotInterval = 400; // Faster shots
+                this.shotInterval = 770; // Initial fire rate set to ~1.3 shots per second
 
                 this.invincible = false;
                 this.invincibleTimer = 0;
                 this.invincibleDuration = 1800; // Longer invincibility duration
+
+                this.status = {
+                    paralyzed: false,
+                    paralyzeTimer: 0,
+                    paralyzeDuration: 0,
+                    slowed: false,
+                    slowTimer: 0,
+                    slowDuration: 0,
+                    slowFactor: 1,
+                    poisoned: false,
+                    poisonTimer: 0,
+                    poisonDuration: 0,
+                    poisonDamage: 0,
+                    poisonInterval: 1000,
+                    poisonLastTick: Date.now(),
+                    pushVelocityX: 0,
+                    pushVelocityY: 0,
+                };
 
                 // Weapon animation properties
                 this.weaponAnimationTimer = 0;
@@ -51,12 +69,12 @@ class Player {
                 // this.projectileUpgradeLevel = 0; 
                 
                 this.specialAbilities = {
-                    push: { level: 0, timer: 0, interval: 5000 + 1000, originalInterval: 5000 + 1000, active: false, duration: 1200, baseRadius: (120 * 2) * 0.27, damageInterval: 180, lastDamageTime: 0, maxLevel: 10, description: 'Cria uma Área em volta do Atirador que causa Dano e empurra os Inimigos.' }, // maxLevel 10 // PUSH: Increased by 20%
+                    push: { level: 0, timer: 0, interval: 5000 + 1000, originalInterval: 5000 + 1000, active: false, duration: 1200, baseRadius: (120 * 2) * 0.325, damageInterval: 180, lastDamageTime: 0, maxLevel: 10, description: 'Cria uma Área em volta do Atirador que causa Dano e empurra os Inimigos.' }, // maxLevel 10 // PUSH: Increased by 20%
                     plasma_explosion: { level: 0, timer: 0, interval: 3500 + 1000, originalInterval: 3500 + 1000, projectileCount: 1, baseRadius: 70 * 2, baseDuration: 3500, damageInterval: 500, lastDamageTime: 0, maxLevel: 10, description: 'Lança um Projétil que explode ao atingir um Inimigo, deixando a Área em chamas.' }, // maxLevel 10
                     letal_shot: { level: 0, timer: 0, interval: 3800 + 1000, originalInterval: 3800 + 1000, sizeMultiplier: 1, maxLevel: 10, description: 'Lança um Projétil poderoso que perfura Inimigos atingidos.' }, // maxLevel 10
-                    zap: { level: 0, timer: 0, interval: 4000 + 1000, originalInterval: 4000 + 1000, maxTargets: 0, maxLevel: 10, description: 'Lança um Projétil que atinge múltiplos Inimigos em cadeia.' }, // maxTargets starts at 0 (adjusted to 3 in applySpecialUpgrade), maxLevel 10
-                    tactic_boomerang: { level: 0, timer: 0, interval: 4500 + 1000, originalInterval: 4500 + 1000, projectileCount: 0, baseDistance: 300, maxLevel: 10, description: 'Lança um Projétil que viaja em uma direção e depois retorna, causando Dano a tudo que atinge.' }, // projectileCount starts at 0, maxLevel 10
-                    tornado_grenade: { level: 0, timer: 0, interval: 5500 + 1000, originalInterval: 5500 + 1000, duration: 3500, originalDuration: 3500, baseRadius: (50 * 2) * 1.5, damageInterval: 180, lastDamageTime: 0, maxLevel: 10, description: 'Cria um tornado que causa Dano por segundo e puxa Inimigos para o seu centro.' } // maxLevel 10
+                    zap: { level: 0, timer: 0, interval: 4000 + 1000, originalInterval: 4000 + 1000, maxTargets: 0, maxLevel: 10, description: 'Dispara um raio instável que salta entre vários Inimigos, atingindo até 3 com dano concentrado.' }, // maxTargets starts at 0 (adjusted to 3 in applySpecialUpgrade), maxLevel 10
+                    tactic_boomerang: { level: 0, timer: 0, interval: 4500 + 1000, originalInterval: 4500 + 1000, projectileCount: 0, baseDistance: 300, maxLevel: 10, description: 'Lança um projétil pixelado que segue, retorna e perfura Inimigos no caminho de volta.' }, // projectileCount starts at 0, maxLevel 10
+                    tornado_grenade: { level: 0, timer: 0, interval: 5500 + 1000, originalInterval: 5500 + 1000, duration: 3500, originalDuration: 3500, baseRadius: (50 * 2) * 1.5, damageInterval: 180, lastDamageTime: 0, maxLevel: 10, description: 'Invoca um tornado em pixel art que danifica inimigos ao longo do tempo e os puxa para o centro.' } // maxLevel 10
                 };
                 this.cooldownsHalved = false;
                 this.kills = 0;
@@ -120,6 +138,24 @@ class Player {
                 // The +SPEED attribute does not have its own 'Level' associated with `projectileUpgradeLevel`.
                 // The speed logic should be applied via `applyBasicUpgrade` and directly change `speed` and `shotInterval`.
 
+                if (this.status.paralyzed) {
+                    currentSpeed = 0;
+                }
+                if (this.status.slowed) {
+                    currentSpeed *= this.status.slowFactor;
+                }
+
+                if (this.status.pushVelocityX || this.status.pushVelocityY) {
+                    this.x += this.status.pushVelocityX;
+                    this.y += this.status.pushVelocityY;
+                    this.status.pushVelocityX *= 0.72;
+                    this.status.pushVelocityY *= 0.72;
+                    if (Math.abs(this.status.pushVelocityX) + Math.abs(this.status.pushVelocityY) < 0.15) {
+                        this.status.pushVelocityX = 0;
+                        this.status.pushVelocityY = 0;
+                    }
+                }
+
 
                 if (this.controls.up) moveY -= currentSpeed;
                 if (this.controls.down) moveY += currentSpeed;
@@ -134,14 +170,33 @@ class Player {
                 this.x += moveX;
                 this.y += moveY;
 
-                // Limit player within the screen
-                this.x = Math.max(this.radius, Math.min(canvas.width - this.radius, this.x));
-                this.y = Math.max(this.radius, Math.min(canvas.height - this.radius, this.y));
+                // Limit player within world bounds (allow leaving viewport; camera follows)
+                const worldW = window.worldWidth || canvas.width * 3;
+                const worldH = window.worldHeight || canvas.height * 3;
+                this.x = Math.max(this.radius, Math.min(worldW - this.radius, this.x));
+                this.y = Math.max(this.radius, Math.min(worldH - this.radius, this.y));
+
+                // If there are multiple players, and the other player is NOT visible, prevent this player from leaving the current viewport
+                if (players && players.length > 1) {
+                    const other = players.find(p => p !== this);
+                    if (other) {
+                        const otherVisible = (other.x >= window.viewLeft && other.x <= window.viewRight && other.y >= window.viewTop && other.y <= window.viewBottom);
+                        if (!otherVisible) {
+                            // Clamp current player to viewport so they cannot leave while other is off-screen
+                            const vxMin = window.viewLeft + this.radius;
+                            const vxMax = window.viewRight - this.radius;
+                            const vyMin = window.viewTop + this.radius;
+                            const vyMax = window.viewBottom - this.radius;
+                            this.x = Math.max(vxMin, Math.min(vxMax, this.x));
+                            this.y = Math.max(vyMin, Math.min(vyMax, this.y));
+                        }
+                    }
+                }
 
                 const now = Date.now();
 
-                // Manual Shot
-                if (this.controls.shoot && now - this.lastShot > currentShotInterval) {
+                // Auto-fire: automatically shoot toward the closest enemy
+                if (now - this.lastShot > currentShotInterval) {
                     let targetEnemy = findClosestEnemy(this);
                     let baseAngle;
                     if (targetEnemy) {
@@ -173,6 +228,38 @@ class Player {
                     }
                 }
 
+                if (this.status.paralyzed) {
+                    this.status.paralyzeTimer += deltaTime;
+                    if (this.status.paralyzeTimer >= this.status.paralyzeDuration) {
+                        this.status.paralyzed = false;
+                        this.status.paralyzeTimer = 0;
+                    }
+                }
+
+                if (this.status.slowed) {
+                    this.status.slowTimer += deltaTime;
+                    if (this.status.slowTimer >= this.status.slowDuration) {
+                        this.status.slowed = false;
+                        this.status.slowTimer = 0;
+                        this.status.slowDuration = 0;
+                        this.status.slowFactor = 1;
+                    }
+                }
+
+                if (this.status.poisoned) {
+                    this.status.poisonTimer += deltaTime;
+                    if (now - this.status.poisonLastTick >= this.status.poisonInterval) {
+                        this.status.poisonLastTick = now;
+                        this.takeDamage(this.status.poisonDamage);
+                    }
+                    if (this.status.poisonTimer >= this.status.poisonDuration) {
+                        this.status.poisoned = false;
+                        this.status.poisonTimer = 0;
+                        this.status.poisonDuration = 0;
+                        this.status.poisonDamage = 0;
+                    }
+                }
+
                 this.updateSpecialAbilities(deltaTime);
                 this.handleBoomerangLaunchQueue(now); // Handle sequential boomerang launches
             }
@@ -186,6 +273,37 @@ class Player {
                     }
                     this.invincible = true;
                     this.invincibleTimer = 0;
+                }
+            }
+
+            applyStatusEffect(effect) {
+                if (!effect || !effect.type) return;
+                switch (effect.type) {
+                    case 'paralyze':
+                        this.status.paralyzed = true;
+                        this.status.paralyzeTimer = 0;
+                        this.status.paralyzeDuration = effect.duration || 1200;
+                        break;
+                    case 'slow':
+                        this.status.slowed = true;
+                        this.status.slowTimer = 0;
+                        this.status.slowDuration = effect.duration || 2400;
+                        this.status.slowFactor = effect.factor || 0.5;
+                        break;
+                    case 'poison':
+                        this.status.poisoned = true;
+                        this.status.poisonTimer = 0;
+                        this.status.poisonDuration = effect.duration || 4000;
+                        this.status.poisonDamage = effect.damage || 2;
+                        this.status.poisonInterval = effect.interval || 1000;
+                        this.status.poisonLastTick = Date.now();
+                        break;
+                    case 'push':
+                        this.status.pushVelocityX = (effect.powerX || 0) * 1.2;
+                        this.status.pushVelocityY = (effect.powerY || 0) * 1.2;
+                        break;
+                    default:
+                        break;
                 }
             }
 
@@ -211,7 +329,7 @@ class Player {
                     this.expNeeded += 18;
                 }
 
-                this.damage += 3; // Damage per level up changed to 3
+                this.damage += 2; // Slightly reduced damage-per-level for basic attack balance
                 this.maxHealth += 2; // Increases max health by 2 per Level
                 this.health = Math.min(this.maxHealth, this.health + 2); // Heals the player by 2 on level up
                 this.updateSpecialAbilityDamages();
@@ -412,7 +530,7 @@ class Player {
                             speed: (8 * this.projectileSpeedMultiplier),
                             angle: angle,
                             damage: this.specialAbilities.zap.damage,
-                            color: '#87CEEB', // Light Blue
+                            color: '#00FFFF', // Neon cyan for Zap
                             type: 'zap',
                             isBasicProjectile: false, // Added to identify special projectiles
                             player: this,
@@ -541,38 +659,40 @@ class Player {
                 ctx.save();
                 ctx.translate(this.x, this.y);
 
-                // Draw player as a circle (default or image-filled)
-                if (this.image) {
-                    ctx.beginPath();
-                    ctx.arc(0, 0, this.radius, 0, Math.PI * 2, false);
-                    ctx.clip();
-                    ctx.drawImage(this.image, -this.radius, -this.radius, this.radius * 2, this.radius * 2);
-                    ctx.restore(); // Restore context after clipping for image
-                    
-                    // Draw the border after restoring the context so it's not clipped
-                    ctx.beginPath();
-                    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2, false);
-                    // CYAN outline for Player 1, PURPLE for Player 2 when using image
-                    ctx.strokeStyle = (this.playerNumber === 1) ? '#00FFFF' : '#800080'; 
-                    ctx.lineWidth = 3; // Border thickness
-                    ctx.stroke();
+                // Draw player as an octagon (default or image-filled)
+                const sides = 8;
+                const angleStep = (Math.PI * 2) / sides;
+                const shapePath = new Path2D();
+                for (let i = 0; i < sides; i++) {
+                    const angle = i * angleStep - Math.PI / 8;
+                    const px = Math.cos(angle) * this.radius;
+                    const py = Math.sin(angle) * this.radius;
+                    if (i === 0) {
+                        shapePath.moveTo(px, py);
+                    } else {
+                        shapePath.lineTo(px, py);
+                    }
+                }
+                shapePath.closePath();
 
+                if (this.image) {
+                    ctx.save();
+                    ctx.clip(shapePath);
+                    ctx.drawImage(this.image, -this.radius, -this.radius, this.radius * 2, this.radius * 2);
+                    ctx.restore();
+                    ctx.strokeStyle = (this.playerNumber === 1) ? '#00FFFF' : '#800080';
+                    ctx.lineWidth = 3;
+                    ctx.stroke(shapePath);
                 } else {
-                    // Draw a solid circle if no image
-                    ctx.beginPath();
-                    ctx.arc(0, 0, this.radius, 0, Math.PI * 2, false);
-                    // Player 1: CYAN BLUE, Player 2: PURPLE - Increased opacity to be more solid
-                    ctx.fillStyle = (this.playerNumber === 1) ? 'rgba(0, 255, 255, 0.8)' : 'rgba(128, 0, 128, 0.8)';
-                    ctx.fill();
-                    // Player 1: LIGHT BLUE outline, Player 2: DEEP PINK outline
-                    ctx.strokeStyle = (this.playerNumber === 1) ? '#ADD8E6' : '#FF1493'; 
+                    ctx.fillStyle = (this.playerNumber === 1) ? 'rgba(0, 255, 255, 0.88)' : 'rgba(128, 0, 128, 0.88)';
+                    ctx.fill(shapePath);
+                    ctx.strokeStyle = (this.playerNumber === 1) ? '#ADD8E6' : '#FF1493';
                     ctx.lineWidth = 2;
-                    ctx.stroke();
-                    ctx.restore(); // Restore context for consistency
+                    ctx.stroke(shapePath);
                 }
 
-                ctx.save();
-                ctx.translate(this.x, this.y); // Translate to player's position for weapon drawing
+                // Draw weapon and effects around the player
+                // No additional restore here to preserve player-local coordinates
 
                 // Calculate weapon position relative to player and current angle
                 let weaponAngle = 0;

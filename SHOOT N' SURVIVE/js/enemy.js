@@ -1,5 +1,5 @@
 class Enemy {
-            constructor(x, y, isBoss = false, subtype = 'normal') {
+            constructor(x, y, isBoss = false, subtype = 'normal', forcedTheme = null, initialVel = {vx:0, vy:0}, spawnOrbitDuration = 1000) {
                 this.x = x;
                 this.y = y;
                 this.id = Date.now() + Math.random();
@@ -53,110 +53,64 @@ class Enemy {
                 // Base stats before subtype/boss adjustments
                 let baseRadius, baseHealth, baseDamage, baseSpeed;
 
+                // Reasonable base values for themes (kept modest so wave scaling matters)
+                const THEME_BASE = {
+                    drone: {hp: 18, dmg: 6, spd: 0.9, radius: 12},
+                    robotSentinel: {hp: 30, dmg: 9, spd: 0.7, radius: 16},
+                    spaceThief: {hp: 22, dmg: 7, spd: 1.3, radius: 11},
+                    galacticPirate: {hp: 40, dmg: 10, spd: 0.8, radius: 18},
+                    invaderAlien: {hp: 45, dmg: 11, spd: 0.95, radius: 17},
+                    otherworldlyBeast: {hp: 65, dmg: 14, spd: 0.5, radius: 22},
+                    intergalacticHunter: {hp: 55, dmg: 13, spd: 1.05, radius: 16},
+                    universeSentinel: {hp: 80, dmg: 16, spd: 0.45, radius: 26},
+                    voidWarrior: {hp: 95, dmg: 15, spd: 0.7, radius: 24},
+                    voidBeast: {hp: 120, dmg: 18, spd: 0.6, radius: 28},
+                    chaosLord: {hp: 5000, dmg: 45, spd: 0.35, radius: 80},
+                    defaultSpace: {hp: 20, dmg: 7, spd: 0.8, radius: 14}
+                };
+
                 if (isBoss) {
-                    baseRadius = (25 * 3.5) * 0.8; // Larger bosses, without game scale factor, reduced by 20%
-                    // Bosses: Initial health will be 700, for each boss wave they will receive +700 health.
-                    baseHealth = 700 + (bossCount * 700); 
-                    baseDamage = 30; // More Damage
-                    baseSpeed = 0.7; // Slightly slower for bosses
-                    this.bossTitle = "";
+                    // Bosses are significantly tougher but scaled reasonably with bossCount
+                    const base = THEME_BASE[this.theme] || THEME_BASE.defaultSpace;
+                    baseRadius = (base.radius * GAME_SCALE_FACTOR) * 1.6;
+                    baseHealth = base.hp * 10 + (bossCount * 800); // Boss base multiplied
+                    baseDamage = Math.max(12, base.dmg * 2);
+                    baseSpeed = Math.max(0.25, base.spd * 0.9);
+                    this.bossTitle = this.bossTitle || '';
                 } else {
-                    // Standardized sizes for non-boss enemies
-                    const sizes = {
-                        'fighter': 1.1, // Medium
-                        'tank': 1.2,    // Largest (changed from 'warrior')
-                        'rogue': 0.9,   // Smallest
-                        'normal': 1.0  // Default size
-                    };
-                    
-                    // Apply subtype sizing
-                    let subtypeRadiusFactor = sizes[subtype] || sizes['normal'];
-                    baseRadius = (15 * GAME_SCALE_FACTOR) * subtypeRadiusFactor; // Base size for normal enemies, adjusted by subtype factor
+                    // Standardized sizes for non-boss enemies by subtype
+                    const SUBTYPE_FACTOR = { normal: 1.0, fighter: 0.95, tank: 1.35, rogue: 0.8 };
+                    const base = THEME_BASE[this.theme] || THEME_BASE.defaultSpace;
+                    baseRadius = Math.max(8, Math.floor((base.radius * GAME_SCALE_FACTOR) * (SUBTYPE_FACTOR[subtype] || 1)));
+                    baseHealth = base.hp;
+                    baseDamage = base.dmg;
+                    baseSpeed = base.spd;
 
-                    switch(this.theme) {
-                        case 'drone': baseHealth = 20; baseDamage = 9; baseSpeed = 0.8; break; // Base of 18
-                        case 'robotSentinel': baseHealth = 35; baseDamage = 11; baseSpeed = 0.7; break;
-                        case 'spaceThief': baseHealth = 40; baseDamage = 10; baseSpeed = 1.3; break;
-                        case 'galacticPirate': baseHealth = 55; baseDamage = 13; baseSpeed = 0.6; break;
-                        case 'invaderAlien': baseHealth = 60; baseDamage = 12; baseSpeed = 0.9; break;
-                        case 'otherworldlyBeast': baseHealth = 75; baseDamage = 15; baseSpeed = 0.5; break;
-                        case 'intergalacticHunter': baseHealth = 88; baseDamage = 14; baseSpeed = 1.0; break;
-                        case 'universeSentinel': baseHealth = 95; baseDamage = 17; baseSpeed = 0.4; break;
-                        case 'voidWarrior': baseHealth = 108; baseDamage = 16; baseSpeed = 0.8; break;
-                        case 'voidBeast': baseHealth = 115; baseDamage = 19; baseSpeed = 0.6; break;
-                        case 'chaosLord': baseHealth = 15000; baseDamage = 50; baseSpeed = 0.3; break; // Massive Final Boss
-                        default: baseHealth = 18; baseDamage = 9; baseSpeed = 0.8; break;
-                    }
+                    // Apply mild subtype effects
+                    if (subtype === 'tank') baseHealth *= 1.6;
+                    if (subtype === 'fighter') baseDamage *= 1.4;
+                    if (subtype === 'rogue') baseSpeed *= 1.6;
                 }
-                
-                const playersArray = window.players || [];
-                const highestPlayerLevel = playersArray.length > 0 ? 
-                    Math.max(...playersArray.map(p => p.level || 1)) : 
-                    1;
-                
-                let playerLevelHealthContribution = highestPlayerLevel * 2; // Each player level grants +2 health to the enemy
 
-                // Apply theme-specific adjustments
+                // Factor in highest player level to slightly increase enemy hp
+                const playersArray = window.players || [];
+                const highestPlayerLevel = playersArray.length > 0 ? Math.max(...playersArray.map(p => p.level || 1)) : 1;
+                const playerLevelHealthContribution = highestPlayerLevel * 1.5;
+
+                // Wave scaling: linear + small exponential factor to increase with hordes
+                const waveLinear = 1 + waveLevel * 0.06; // ~6% more HP per wave
+                const waveExponential = Math.pow(1.01, Math.max(0, waveLevel - 1)); // gentle scaling
+
+                // Final stats
                 if (!isBoss) {
-                    switch(this.theme) {
-                        case 'drone': break; // No base change
-                        case 'robotSentinel': 
-                            baseSpeed *= 0.9; 
-                            baseHealth *= 1.2; 
-                            break;
-                        case 'spaceThief': 
-                            baseSpeed *= 1.3; 
-                            baseHealth *= 0.8; 
-                            baseDamage *= 1.1; 
-                            break;
-                        case 'galacticPirate': 
-                            baseSpeed *= 1.5; 
-                            baseHealth *= 1.5; 
-                            baseDamage *= 1.2; 
-                            break;
-                        case 'invaderAlien': 
-                            baseSpeed *= 1.0; 
-                            baseHealth *= 1.1; 
-                            baseDamage *= 1.05; 
-                            break;
-                        case 'otherworldlyBeast': 
-                            baseSpeed *= 0.4; 
-                            baseHealth *= 1.8; 
-                            baseDamage *= 1.3; 
-                            break;
-                        case 'intergalacticHunter': 
-                            baseSpeed *= 1.1; 
-                            baseHealth *= 0.95; 
-                            baseDamage *= 1.15; 
-                            break;
-                        case 'universeSentinel': 
-                            baseSpeed *= 0.3; 
-                            baseHealth *= 2.0; 
-                            baseDamage *= 1.5; 
-                            break;
-                        case 'voidWarrior': 
-                            baseSpeed *= 0.8; 
-                            baseHealth *= 1.3; 
-                            baseDamage *= 1.2; 
-                            break;
-                        case 'voidBeast': 
-                            baseSpeed *= 0.6; 
-                            baseHealth *= 1.6; 
-                            baseDamage *= 1.4; 
-                            break;
-                        case 'chaosLord': // Final boss, no adjustments here, base values are already high
-                            break;
-                    }
-                    // Apply subtype-specific stat multipliers (after theme adjustments)
-                    if (this.subtype === 'tank') {
-                        baseHealth *= 2; // 2x more health for Tank
-                    } else if (this.subtype === 'fighter') {
-                        baseDamage *= 2; // 2x more damage for Fighter
-                    } else if (this.subtype === 'rogue') {
-                        baseSpeed *= 2; // 2x more speed for Rogue
-                    }
+                    this.health = Math.max(5, Math.floor(baseHealth * waveLinear * waveExponential + playerLevelHealthContribution));
+                    this.damage = Math.max(1, Math.floor(baseDamage * (1 + waveLevel * 0.03)));
+                    this.speed = Math.min(3.5, baseSpeed * (1 + waveLevel * 0.004));
                 } else {
-                    // Assign specific boss titles based on theme
+                    this.health = Math.max(200, Math.floor(baseHealth * (1 + waveLevel * 0.08) + bossCount * 300));
+                    this.damage = Math.max(8, Math.floor(baseDamage * (1 + waveLevel * 0.05)));
+                    this.speed = Math.max(0.2, baseSpeed * (1 + waveLevel * 0.002));
+                    // Assign boss title based on theme for display
                     switch(this.theme) {
                         case 'drone': this.bossTitle = 'NÚCLEO DRONE MESTRE'; break;
                         case 'robotSentinel': this.bossTitle = 'LÍDER DA GUARDA ROBÓTICA'; break;
@@ -168,30 +122,27 @@ class Enemy {
                         case 'universeSentinel': this.bossTitle = 'GRANDE MESTRE UNIVERSAL'; break;
                         case 'voidWarrior': this.bossTitle = 'GRANDE GUERREIRO DO VAZIO'; break;
                         case 'voidBeast': this.bossTitle = 'A BESTA SOMBRIA'; break;
-                        case 'chaosLord': this.bossTitle = 'O SENHOR DO CAOS'; break; // Final boss
+                        case 'chaosLord': this.bossTitle = 'O SENHOR DO CAOS'; break;
                         default: this.bossTitle = 'CHEFE ALIENÍGENA'; break;
                     }
                 }
 
-                // Final values: +5 health for all Enemies.
-                this.health = Math.floor(baseHealth + 5 + (waveLevel * 5) + playerLevelHealthContribution); 
-                this.damage = Math.floor(baseDamage + (waveLevel * 0.4));
-                this.speed = baseSpeed + (waveLevel * 0.015);
-
-                // Enemy Health Balancing per Wave
-                if (!isBoss) {
-                    if (waveLevel >= 6 && waveLevel < 10) {
-                        this.health *= 2; // Double HEALTH
-                    } else if (waveLevel >= 10 && waveLevel < 15) {
-                        this.health = (this.health * 2) + 100; // Double HEALTH + 100
-                    } else if (waveLevel >= 15) {
-                        this.health = (this.health * 2) + 100 + 20; // Double HEALTH + 100 + 20
-                    }
-                }
-
-                this.radius = baseRadius;
+                // Set radius and clamp
+                this.radius = Math.min(120, Math.max(8, Math.floor(baseRadius)));
                 this.maxHealth = this.health;
                 this.isDead = false;
+                // Optional initial velocity applied for a short spawn-orbit phase
+                this.vx = (initialVel && initialVel.vx) || 0;
+                this.vy = (initialVel && initialVel.vy) || 0;
+                this.spawnOrbitTimer = 0;
+                this.spawnOrbitDuration = spawnOrbitDuration || 0;
+
+                this.attackTimer = Math.random() * 1200;
+                this.attackCooldown = 1500 + Math.random() * 1200;
+                this.attackRange = this.isBoss ? 220 : 140;
+                this.attackTypes = this.chooseAttackTypes();
+                this.attackType = this.attackTypes[Math.floor(Math.random() * this.attackTypes.length)];
+                this.attackCharge = 0;
             }
 
             // Function to get more neutral colors, with options for more vibrant colors
@@ -227,6 +178,78 @@ class Enemy {
                 return `rgb(${Math.floor(r)}, ${Math.floor(g)}, ${Math.floor(b)})`;
             }
 
+            chooseAttackTypes() {
+                if (this.isBoss) {
+                    const bossOptions = ['melee', 'poison', 'slow', 'push', 'stun', 'pierce'];
+                    const selected = [];
+                    const count = 2 + Math.floor(Math.random() * 2);
+                    while (selected.length < count) {
+                        const candidate = bossOptions[Math.floor(Math.random() * bossOptions.length)];
+                        if (!selected.includes(candidate)) selected.push(candidate);
+                    }
+                    return selected;
+                }
+
+                const subtypeAttackMap = {
+                    normal: ['melee', 'poison'],
+                    fighter: ['pierce', 'melee'],
+                    tank: ['push', 'slow'],
+                    rogue: ['melee', 'slow'],
+                };
+                return subtypeAttackMap[this.subtype] || ['melee'];
+            }
+
+            performAttack(target, allTargets) {
+                if (!target || target.health <= 0) return;
+                const dx = target.x - this.x;
+                const dy = target.y - this.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const dirX = dist === 0 ? 0 : dx / dist;
+                const dirY = dist === 0 ? 0 : dy / dist;
+                const baseDamage = Math.max(1, Math.floor(this.damage * (this.isBoss ? 1.15 : 1.0)));
+                const attackRange = this.attackRange + (this.attackType === 'pierce' ? 20 : 0);
+                if (dist > attackRange) return;
+
+                switch (this.attackType) {
+                    case 'poison':
+                        target.takeDamage(Math.floor(baseDamage * 0.9));
+                        if (typeof target.applyStatusEffect === 'function') {
+                            target.applyStatusEffect({ type: 'poison', damage: Math.max(1, Math.floor(baseDamage * 0.25)), duration: 4000, interval: 1000 });
+                        }
+                        break;
+                    case 'slow':
+                        target.takeDamage(Math.floor(baseDamage * 0.85));
+                        if (typeof target.applyStatusEffect === 'function') {
+                            target.applyStatusEffect({ type: 'slow', factor: 0.52, duration: 2600 });
+                        }
+                        break;
+                    case 'push':
+                        target.takeDamage(Math.floor(baseDamage * 0.95));
+                        if (typeof target.applyStatusEffect === 'function') {
+                            target.applyStatusEffect({ type: 'push', powerX: dirX * 7, powerY: dirY * 7 });
+                        }
+                        break;
+                    case 'stun':
+                        target.takeDamage(Math.floor(baseDamage * 0.8));
+                        if (typeof target.applyStatusEffect === 'function') {
+                            target.applyStatusEffect({ type: 'paralyze', duration: 1200 });
+                        }
+                        break;
+                    case 'pierce':
+                        for (const player of allTargets) {
+                            const pDist = Math.sqrt((player.x - this.x) ** 2 + (player.y - this.y) ** 2);
+                            if (pDist <= attackRange * 1.2) {
+                                player.takeDamage(baseDamage);
+                            }
+                        }
+                        break;
+                    case 'melee':
+                    default:
+                        target.takeDamage(baseDamage);
+                        break;
+                }
+            }
+
             update(targets, deltaTime) {
                 this.animationTimer += 1;
                 if (this.paralyzed) {
@@ -256,6 +279,17 @@ class Enemy {
                     }
                 }
 
+                if (this.spawnOrbitTimer < this.spawnOrbitDuration) {
+                    // Apply initial orbital velocity on spawn
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    this.spawnOrbitTimer += deltaTime;
+                    // Slight damping so it eases into normal movement
+                    this.vx *= 0.98;
+                    this.vy *= 0.98;
+                    return; // skip normal targeting while orbiting
+                }
+
                 if (closestTarget) {
                     const angle = Math.atan2(closestTarget.y - this.y, closestTarget.x - this.x);
                     
@@ -265,8 +299,22 @@ class Enemy {
                         currentEnemySpeed *= 1.20; // Increases speed by 20%
                     }
 
+                    // If enemy is offscreen for all players, make it move faster to catch up to the playable map.
+                    const isOffscreen = this.x < window.viewLeft || this.x > window.viewRight || this.y < window.viewTop || this.y > window.viewBottom;
+                    if (isOffscreen) {
+                        currentEnemySpeed *= 1.45 + Math.min(0.35, waveLevel * 0.01);
+                    }
+
                     this.x += Math.cos(angle) * currentEnemySpeed;
                     this.y += Math.sin(angle) * currentEnemySpeed;
+                }
+
+                this.attackTimer += deltaTime;
+                this.attackCharge = Math.min(1, this.attackTimer / Math.max(1, this.attackCooldown));
+                if (this.attackTimer >= this.attackCooldown) {
+                    this.attackTimer = 0;
+                    this.attackCooldown = 1500 + Math.random() * 1200;
+                    this.performAttack(closestTarget, validTargets);
                 }
             }
 
@@ -336,6 +384,15 @@ class Enemy {
                     ctx.fillStyle = '#FFD700'; // Gold neon
                     ctx.textAlign = 'center';
                     ctx.fillText(this.bossTitle, 0, healthBarYOffset + 20);
+                }
+
+                // Attack charge effect
+                if (this.attackCharge > 0.1) {
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.radius + 4 + this.attackCharge * 8, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(255, 210, 120, ${0.16 + this.attackCharge * 0.28})`;
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
                 }
 
                 // Paralysis visual effect
